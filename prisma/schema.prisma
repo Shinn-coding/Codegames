@@ -1,0 +1,266 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum ProductStatus {
+  DRAFT
+  AVAILABLE
+  COMING_SOON
+  ARCHIVED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  EXPIRED
+  FAILED
+  REFUNDED
+}
+
+enum LicenseStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(USER)
+  accounts      Account[]
+  sessions      Session[]
+  orders        Order[]
+  licenses      License[]
+  auditLogs     AuditLog[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Product {
+  id                String        @id @default(cuid())
+  slug              String        @unique
+  name              String
+  tagline           String
+  description       String
+  features          String[]      @default([])
+  stack             String[]      @default([])
+  changelog         Json?
+  category          String
+  status            ProductStatus @default(DRAFT)
+  priceIdr          Int
+  earlyBirdPriceIdr Int?
+  earlyBirdEndsAt   DateTime?
+  licenseType       String        @default("personal")
+  version           String        @default("1.0.0")
+  coverGradient     String?
+  demoUrl           String?
+  featured          Boolean       @default(false)
+  sortOrder         Int           @default(0)
+  files             ProductFile[]
+  orders            Order[]
+  licenses          License[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([status, sortOrder])
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  orderNumber    String      @unique
+  userId         String?
+  user           User?       @relation(fields: [userId], references: [id])
+  email          String
+  productId      String
+  product        Product     @relation(fields: [productId], references: [id])
+  amountIdr      Int
+  currency       String      @default("IDR")
+  status         OrderStatus @default(PENDING)
+  provider       String      @default("midtrans")
+  providerRef    String?
+  idempotencyKey String      @unique
+  paidAt         DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  license        License?
+
+  @@index([userId, status])
+  @@index([status, expiresAt])
+}
+
+model License {
+  id              String          @id @default(cuid())
+  orderId         String          @unique
+  order           Order           @relation(fields: [orderId], references: [id])
+  productId       String
+  product         Product         @relation(fields: [productId], references: [id])
+  userId          String?
+  user            User?           @relation(fields: [userId], references: [id])
+  keyHash         String          @unique
+  keyPrefix       String
+  keyLast4        String
+  type            String          @default("personal")
+  maxActivations  Int             @default(1)
+  activationCount Int             @default(0)
+  status          LicenseStatus   @default(ACTIVE)
+  issuedAt        DateTime        @default(now())
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+  activations     Activation[]
+  downloadTokens  DownloadToken[]
+  downloadLogs    DownloadLog[]
+
+  @@index([userId, status])
+}
+
+model ProductFile {
+  id             String   @id @default(cuid())
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  version        String
+  storageKey     String
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  checksumSha256 String
+  isCurrent      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  @@unique([productId, version])
+  @@index([productId, isCurrent])
+}
+
+model Activation {
+  id            String   @id @default(cuid())
+  licenseId     String
+  license       License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  instanceId    String
+  ipHash        String?
+  userAgentHash String?
+  createdAt     DateTime @default(now())
+  lastSeenAt    DateTime @default(now())
+
+  @@unique([licenseId, instanceId])
+  @@index([licenseId, lastSeenAt])
+}
+
+model DownloadToken {
+  id        String   @id @default(cuid())
+  licenseId String
+  license   License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  maxUses   Int      @default(2)
+  usedCount Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@index([licenseId, createdAt])
+}
+
+model DownloadLog {
+  id        String   @id @default(cuid())
+  licenseId String
+  license   License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  tokenId   String?
+  ipHash    String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([licenseId, createdAt])
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  eventId     String   @unique
+  orderNumber String?
+  payloadHash String
+  status      String
+  processedAt DateTime @default(now())
+
+  @@index([orderNumber])
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model RateLimit {
+  key         String
+  windowStart DateTime
+  count       Int      @default(1)
+
+  @@id([key, windowStart])
+  @@index([windowStart])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  meta      Json?
+  ipHash    String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@index([actorId])
+}
