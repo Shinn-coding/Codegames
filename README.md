@@ -50,7 +50,8 @@ implemented and covered by unit and database integration tests:
 
 ## Demo setup (from zero)
 
-Prerequisites: Node.js 22.6+ (Node 24 LTS recommended) and npm.
+Prerequisites: Node.js 24.22.1+ (Node 24 LTS) and npm. This is the first
+patched 24.x release for CVE-2026-111497.
 
 ```bash
 npm install
@@ -501,6 +502,10 @@ Prisma CLI loads `.env`; Next.js loads `.env.local`. This workspace uses
   uploads use it today.
 - The Vercel Blob adapter deliberately fails closed in demo mode. Switch storage
   only as part of the deployment phase.
+- The runtime is pinned to Node 24.22.1+ through `engines` and `.nvmrc`. That
+  release includes the fix for CVE-2026-111497, a high-severity Brotli decoder
+  issue also fixed in Node 22.23.4 and 26.12.1. `npm audit` does not scan the
+  Node.js runtime itself. Vercel must be set to Node.js 24.x.
 
 ## Security review
 
