@@ -9,7 +9,7 @@ build/
 .env.*.local
 !.env.example
 
-storage/
+/storage/
 .freebuff/
 *.log
 .DS_Store

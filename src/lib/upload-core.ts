@@ -6,9 +6,16 @@
  * declared `Content-Type` from the browser is never trusted on its own.
  */
 
+import { assertSafeStorageKey } from "./storage/keys.ts";
+
 export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
+export const PRODUCT_ID_PATTERN = /^[a-z0-9]{16,40}$/;
+export const PRODUCT_VERSION_PATTERN =
+  /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+
 export type UploadKind = "zip" | "pdf" | "text";
+export type UploadExtension = "zip" | "pdf" | "txt" | "md";
 
 export type DetectedUpload = {
   kind: UploadKind;
@@ -129,4 +136,52 @@ export function buildProductStorageKey(input: {
   }
 
   return `products/${input.slug}/${input.slug}-${input.version}-${input.randomId}.${input.extension}`;
+}
+
+/**
+ * Validate a pathname supplied by the client-side Blob uploader before it is
+ * used to read or record a private product file.
+ */
+export function validateProductUploadTarget(input: {
+  pathname: string;
+  slug: string;
+  version: string;
+  fileName: string;
+}): { fileName: string; extension: UploadExtension } | null {
+  if (!PRODUCT_VERSION_PATTERN.test(input.version)) {
+    return null;
+  }
+
+  const extension = getFileExtension(input.fileName);
+
+  if (!["zip", "pdf", "txt", "md"].includes(extension)) {
+    return null;
+  }
+
+  try {
+    assertSafeStorageKey(input.pathname);
+  } catch {
+    return null;
+  }
+
+  const prefix = `products/${input.slug}/${input.slug}-${input.version}-`;
+  const suffix = `.${extension}`;
+
+  if (
+    !input.pathname.startsWith(prefix) ||
+    !input.pathname.endsWith(suffix)
+  ) {
+    return null;
+  }
+
+  const randomId = input.pathname.slice(prefix.length, -suffix.length);
+
+  if (!/^[A-Za-z0-9]{12}$/.test(randomId)) {
+    return null;
+  }
+
+  return {
+    fileName: sanitizeUploadFileName(input.fileName),
+    extension: extension as UploadExtension,
+  };
 }

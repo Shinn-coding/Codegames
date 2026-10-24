@@ -24,7 +24,9 @@ export default function proxy(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
-    `connect-src 'self'${isDevelopment ? " ws: wss:" : ""}`,
+    `connect-src 'self' https://blob.vercel-storage.com https://*.blob.vercel-storage.com${
+      isDevelopment ? " ws: wss:" : ""
+    }`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

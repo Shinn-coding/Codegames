@@ -1,11 +1,25 @@
 "use client";
 
+import { upload } from "@vercel/blob/client";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { CircleNotch, UploadSimple } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/field";
+import {
+  MAX_UPLOAD_BYTES,
+  PRODUCT_VERSION_PATTERN,
+  buildProductStorageKey,
+  getFileExtension,
+} from "@/lib/upload-core";
+
+type UploadMode = "server" | "blob";
+
+type UploadPayload = {
+  error?: unknown;
+  file?: { fileName?: string; version?: string };
+};
 
 type UploadState =
   | { status: "idle" }
@@ -13,48 +27,116 @@ type UploadState =
   | { status: "success"; message: string }
   | { status: "error"; message: string };
 
+async function readUploadResponse(response: Response): Promise<UploadPayload> {
+  const payload = (await response.json().catch(() => ({}))) as UploadPayload;
+
+  if (!response.ok) {
+    throw new Error(
+      typeof payload.error === "string" ? payload.error : "The upload failed.",
+    );
+  }
+
+  return payload;
+}
+
 export function ProductFileUpload({
   productId,
+  productSlug,
   defaultVersion,
+  mode,
 }: {
   productId: string;
+  productSlug: string;
   defaultVersion: string;
+  mode: UploadMode;
 }) {
   const router = useRouter();
   const [state, setState] = useState<UploadState>({ status: "idle" });
 
+  async function uploadThroughServer(form: HTMLFormElement) {
+    const response = await fetch(
+      `/api/admin/products/${encodeURIComponent(productId)}/files`,
+      {
+        method: "POST",
+        body: new FormData(form),
+        headers: { Accept: "application/json" },
+      },
+    );
+
+    return readUploadResponse(response);
+  }
+
+  async function uploadThroughBlob(form: HTMLFormElement) {
+    const data = new FormData(form);
+    const file = data.get("file");
+    const version = String(data.get("version") ?? "").trim();
+
+    if (!(file instanceof File)) {
+      throw new Error("Choose a file to upload.");
+    }
+
+    if (file.size === 0) {
+      throw new Error("The file is empty.");
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      throw new Error("The file is larger than the 50 MB limit.");
+    }
+
+    if (!PRODUCT_VERSION_PATTERN.test(version)) {
+      throw new Error("Use a version such as 1.2.0 before uploading.");
+    }
+
+    const extension = getFileExtension(file.name);
+
+    if (!["zip", "pdf", "txt", "md"].includes(extension)) {
+      throw new Error("Only ZIP, PDF, TXT, or MD files are accepted.");
+    }
+
+    const pathname = buildProductStorageKey({
+      slug: productSlug,
+      version,
+      extension,
+      randomId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+    });
+
+    const blob = await upload(pathname, file, {
+      access: "private",
+      handleUploadUrl: `/api/admin/products/${encodeURIComponent(productId)}/files/upload`,
+      clientPayload: JSON.stringify({ version, fileName: file.name }),
+      multipart: true,
+    });
+
+    const response = await fetch(
+      `/api/admin/products/${encodeURIComponent(productId)}/files/finalize`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          pathname: blob.pathname,
+          version,
+          fileName: file.name,
+        }),
+      },
+    );
+
+    return readUploadResponse(response);
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const body = new FormData(form);
 
     setState({ status: "loading" });
 
     try {
-      const response = await fetch(
-        `/api/admin/products/${encodeURIComponent(productId)}/files`,
-        {
-          method: "POST",
-          body,
-          headers: { Accept: "application/json" },
-        },
-      );
-
-      const payload = (await response.json().catch(() => ({}))) as {
-        error?: unknown;
-        file?: { fileName?: string; version?: string };
-      };
-
-      if (!response.ok) {
-        setState({
-          status: "error",
-          message:
-            typeof payload.error === "string"
-              ? payload.error
-              : "The upload failed.",
-        });
-        return;
-      }
+      const payload =
+        mode === "blob"
+          ? await uploadThroughBlob(form)
+          : await uploadThroughServer(form);
 
       form.reset();
       setState({
@@ -64,10 +146,13 @@ export function ProductFileUpload({
         }.`,
       });
       router.refresh();
-    } catch {
+    } catch (error) {
       setState({
         status: "error",
-        message: "The upload failed. Check your connection and try again.",
+        message:
+          error instanceof Error && error.message
+            ? error.message
+            : "The upload failed. Check your connection and try again.",
       });
     }
   }

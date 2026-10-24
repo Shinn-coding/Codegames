@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowSquareOut, FileArrowUp, Trash } from "@phosphor-icons/r
 import { requireAdmin } from "@/lib/auth-guards";
 import { toDateTimeLocalValue } from "@/lib/admin-core";
 import { getAdminProduct } from "@/lib/admin-products";
+import { env } from "@/lib/env";
 import { formatBytes, formatDate, formatIdr } from "@/lib/format";
 import { parseReleases } from "@/lib/marketing";
 import {
@@ -207,7 +208,9 @@ export default async function EditProductPage({
 
         <ProductFileUpload
           productId={product.id}
+          productSlug={product.slug}
           defaultVersion={product.version}
+          mode={env.STORAGE_DRIVER === "vercel-blob" ? "blob" : "server"}
         />
 
         {product.files.length === 0 ? (

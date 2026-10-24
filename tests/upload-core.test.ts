@@ -7,6 +7,7 @@ import {
   detectUpload,
   getFileExtension,
   sanitizeUploadFileName,
+  validateProductUploadTarget,
 } from "../src/lib/upload-core.ts";
 
 function bytes(...values: number[]): Uint8Array {
@@ -85,6 +86,45 @@ test("builds a slug-scoped storage key", () => {
   assert.equal(
     key,
     "products/nextjs-saas-starter/nextjs-saas-starter-1.2.0-abc123def456.zip",
+  );
+});
+
+test("validates a client-supplied Blob upload target", () => {
+  const base = {
+    pathname:
+      "products/nextjs-saas-starter/nextjs-saas-starter-1.2.0-abc123def456.zip",
+    slug: "nextjs-saas-starter",
+    version: "1.2.0",
+    fileName: "release.zip",
+  };
+
+  assert.deepEqual(validateProductUploadTarget(base), {
+    fileName: "release.zip",
+    extension: "zip",
+  });
+
+  assert.equal(
+    validateProductUploadTarget({
+      ...base,
+      pathname:
+        "products/another-product/another-product-1.2.0-abc123def456.zip",
+    }),
+    null,
+  );
+  assert.equal(
+    validateProductUploadTarget({ ...base, version: "../../1.0.0" }),
+    null,
+  );
+  assert.equal(
+    validateProductUploadTarget({ ...base, fileName: "release.exe" }),
+    null,
+  );
+  assert.equal(
+    validateProductUploadTarget({
+      ...base,
+      pathname: "products/nextjs-saas-starter/../secret.zip",
+    }),
+    null,
   );
 });
 

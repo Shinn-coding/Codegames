@@ -6,6 +6,7 @@ import type { ProductFormValues, ProductStatusValue } from "@/lib/admin-core";
 import { recordAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { getStorage } from "@/lib/storage";
+import { assertSafeStorageKey } from "@/lib/storage/keys";
 import { buildProductStorageKey } from "@/lib/upload-core";
 
 export type AdminProduct = Prisma.ProductGetPayload<{
@@ -183,10 +184,99 @@ export async function setProductStatus(input: {
   });
 }
 
+type PersistedProductFileInput = {
+  product: Pick<Product, "id" | "slug">;
+  version: string;
+  storageKey: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  checksumSha256: string;
+  actorId: string;
+  ipHash?: string;
+};
+
 /**
- * Store an upload in private storage, then record it as the current delivery
- * file for its version. The previous bytes for the same version are removed
- * only after the database transaction succeeds.
+ * Record an already-uploaded private object as the current delivery file for
+ * its version. The previous bytes for the same version are removed only after
+ * the database transaction succeeds.
+ */
+async function persistProductFile(
+  input: PersistedProductFileInput,
+): Promise<ProductFile> {
+  assertSafeStorageKey(input.storageKey);
+
+  let previousKey: string | null = null;
+
+  const file = await prisma.$transaction(async (tx) => {
+    const existing = await tx.productFile.findUnique({
+      where: {
+        productId_version: {
+          productId: input.product.id,
+          version: input.version,
+        },
+      },
+    });
+
+    if (existing && existing.storageKey !== input.storageKey) {
+      previousKey = existing.storageKey;
+    }
+
+    await tx.productFile.updateMany({
+      where: { productId: input.product.id, isCurrent: true },
+      data: { isCurrent: false },
+    });
+
+    if (existing) {
+      return tx.productFile.update({
+        where: { id: existing.id },
+        data: {
+          storageKey: input.storageKey,
+          fileName: input.fileName,
+          mimeType: input.mimeType,
+          sizeBytes: input.sizeBytes,
+          checksumSha256: input.checksumSha256,
+          isCurrent: true,
+        },
+      });
+    }
+
+    return tx.productFile.create({
+      data: {
+        productId: input.product.id,
+        version: input.version,
+        storageKey: input.storageKey,
+        fileName: input.fileName,
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+        checksumSha256: input.checksumSha256,
+        isCurrent: true,
+      },
+    });
+  });
+
+  if (previousKey) {
+    await getStorage().delete(previousKey).catch(() => undefined);
+  }
+
+  await recordAudit({
+    actorId: input.actorId,
+    action: "product.file.upload",
+    entity: "product",
+    entityId: input.product.id,
+    meta: {
+      version: input.version,
+      fileName: input.fileName,
+      sizeBytes: input.sizeBytes,
+    },
+    ipHash: input.ipHash,
+  });
+
+  return file;
+}
+
+/**
+ * Server-side upload path used by local storage and small local uploads.
  */
 export async function saveProductFile(input: {
   product: Pick<Product, "id" | "slug">;
@@ -213,78 +303,43 @@ export async function saveProductFile(input: {
     contentType: input.mimeType,
   });
 
-  let previousKey: string | null = null;
-
   try {
-    const file = await prisma.$transaction(async (tx) => {
-      const existing = await tx.productFile.findUnique({
-        where: {
-          productId_version: {
-            productId: input.product.id,
-            version: input.version,
-          },
-        },
-      });
-
-      if (existing && existing.storageKey !== storageKey) {
-        previousKey = existing.storageKey;
-      }
-
-      await tx.productFile.updateMany({
-        where: { productId: input.product.id, isCurrent: true },
-        data: { isCurrent: false },
-      });
-
-      if (existing) {
-        return tx.productFile.update({
-          where: { id: existing.id },
-          data: {
-            storageKey,
-            fileName: input.fileName,
-            mimeType: input.mimeType,
-            sizeBytes: input.bytes.byteLength,
-            checksumSha256,
-            isCurrent: true,
-          },
-        });
-      }
-
-      return tx.productFile.create({
-        data: {
-          productId: input.product.id,
-          version: input.version,
-          storageKey,
-          fileName: input.fileName,
-          mimeType: input.mimeType,
-          sizeBytes: input.bytes.byteLength,
-          checksumSha256,
-          isCurrent: true,
-        },
-      });
-    });
-
-    if (previousKey) {
-      await storage.delete(previousKey).catch(() => undefined);
-    }
-
-    await recordAudit({
+    return await persistProductFile({
+      product: input.product,
+      version: input.version,
+      storageKey,
+      fileName: input.fileName,
+      mimeType: input.mimeType,
+      sizeBytes: input.bytes.byteLength,
+      checksumSha256,
       actorId: input.actorId,
-      action: "product.file.upload",
-      entity: "product",
-      entityId: input.product.id,
-      meta: {
-        version: input.version,
-        fileName: input.fileName,
-        sizeBytes: input.bytes.byteLength,
-      },
       ipHash: input.ipHash,
     });
-
-    return file;
   } catch (error) {
-    // The bytes are already on disk. Remove them so a failed transaction does
-    // not leave an orphaned object behind.
     await storage.delete(storageKey).catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
+ * Client-upload path: the browser sends the bytes straight to private Blob
+ * storage and the server records the already-uploaded object.
+ */
+export async function saveProductFileFromStorage(input: {
+  product: Pick<Product, "id" | "slug">;
+  version: string;
+  storageKey: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  checksumSha256: string;
+  actorId: string;
+  ipHash?: string;
+}): Promise<ProductFile> {
+  try {
+    return await persistProductFile(input);
+  } catch (error) {
+    await getStorage().delete(input.storageKey).catch(() => undefined);
     throw error;
   }
 }

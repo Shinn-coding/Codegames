@@ -7,6 +7,8 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getClientIp, hashClientIp, isSameOriginRequest } from "@/lib/request";
 import {
   MAX_UPLOAD_BYTES,
+  PRODUCT_ID_PATTERN,
+  PRODUCT_VERSION_PATTERN,
   detectUpload,
   sanitizeUploadFileName,
 } from "@/lib/upload-core";
@@ -15,8 +17,6 @@ export const runtime = "nodejs";
 
 const RATE_LIMIT_PER_MINUTE = 60;
 const MULTIPART_OVERHEAD_BYTES = 1024 * 1024;
-const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
-const ID_PATTERN = /^[a-z0-9]{16,40}$/;
 
 function json(
   body: Record<string, unknown>,
@@ -71,7 +71,7 @@ export async function POST(
 
   const { id } = await params;
 
-  if (!ID_PATTERN.test(id)) {
+  if (!PRODUCT_ID_PATTERN.test(id)) {
     return json({ error: "Product not found." }, { status: 404 });
   }
 
@@ -113,7 +113,7 @@ export async function POST(
 
   const version = String(form.get("version") ?? "").trim();
 
-  if (!VERSION_PATTERN.test(version)) {
+  if (!PRODUCT_VERSION_PATTERN.test(version)) {
     return json(
       { error: "Use a version such as 1.2.0 before uploading." },
       { status: 400 },

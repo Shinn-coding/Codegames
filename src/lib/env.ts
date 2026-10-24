@@ -56,6 +56,15 @@ const envSchema = z
         message: "RESEND_API_KEY is required when EMAIL_PROVIDER=resend",
       });
     }
+
+    if (value.STORAGE_DRIVER === "vercel-blob" && !value.BLOB_READ_WRITE_TOKEN) {
+      context.addIssue({
+        code: "custom",
+        path: ["BLOB_READ_WRITE_TOKEN"],
+        message:
+          "BLOB_READ_WRITE_TOKEN is required when STORAGE_DRIVER=vercel-blob",
+      });
+    }
   });
 
 const parsed = envSchema.safeParse(process.env);

@@ -309,13 +309,16 @@ an action cannot be replayed by a signed-in non-admin.
   `Publish`, `Unpublish`, `Coming soon`, and `Archive` change status without
   touching history. Products are never hard-deleted; orders and licenses keep
   their foreign keys.
-- **Delivery files** — uploads go to
+- **Delivery files** — local demo uploads use
   `POST /api/admin/products/[id]/files` because Server Action bodies default to
-  1 MB. The route is admin-only, same-origin, limited to 60 requests/minute per
-  user, caps the file at 50 MB, and accepts ZIP, PDF, TXT, or MD only. The
-  extension, declared type, and magic bytes must agree; an executable renamed
-  to `.zip` is rejected. Files are stored privately with a generated key,
-  SHA-256 checksum, and normalized display name.
+  1 MB. With `STORAGE_DRIVER=vercel-blob`, the browser uploads directly to a
+  private Blob store through `POST /api/admin/products/[id]/files/upload` and
+  `POST /api/admin/products/[id]/files/finalize`, avoiding Vercel's 4.5 MB
+  function body limit. Both paths are admin-only, same-origin, limited to 60
+  requests/minute per user, cap the file at 50 MB, and accept ZIP, PDF, TXT, or
+  MD only. The extension and magic bytes must agree; an executable renamed to
+  `.zip` is rejected. Files are stored privately with a generated key, SHA-256
+  checksum, and normalized display name.
 - **Versions** — one `ProductFile` per product/version. Uploading an existing
   version replaces its bytes; uploading a new version makes it current and
   clears the old current flag. `Set current` and `Delete` are audited, and
@@ -388,6 +391,7 @@ server variables at startup. Key values:
 | `LICENSE_HMAC_SECRET`    | local-only secret, at least 32 characters              |
 | `STORAGE_DRIVER`         | `local`                                                |
 | `LOCAL_STORAGE_DIR`      | `./storage`                                            |
+| `BLOB_READ_WRITE_TOKEN`  | empty in local mode; required for `vercel-blob`        |
 
 Never commit `.env.local`, `.env`, license signing secrets, or provider tokens.
 
@@ -444,6 +448,8 @@ Prisma CLI loads `.env`; Next.js loads `.env.local`. This workspace uses
 | `POST /api/licenses/reveal`           | Authenticated owner; consumes the one-time reveal cookie        |
 | `POST /api/licenses/[id]/download`    | Authenticated owner; 10 requests/minute/user                    |
 | `POST /api/admin/products/[id]/files` | ADMIN; 60 requests/minute/user; 50 MB; magic-byte checked       |
+| `POST /api/admin/products/[id]/files/upload` | ADMIN; private Blob client-token route; 60/minute/user   |
+| `POST /api/admin/products/[id]/files/finalize` | ADMIN; validates uploaded Blob bytes and records metadata |
 | `GET /api/download/[token]`           | Bearer token; 30 requests/minute/IP                             |
 | `/api/auth/*`                         | Auth.js handlers                                                |
 | `/api/health`                         | Public JSON health check                                        |
@@ -500,8 +506,9 @@ Prisma CLI loads `.env`; Next.js loads `.env.local`. This workspace uses
 - The rate limiter uses an atomic Postgres upsert. Checkout, webhook, license
   activation, license reveal, download issuance, token downloads, and admin
   uploads use it today.
-- The Vercel Blob adapter deliberately fails closed in demo mode. Switch storage
-  only as part of the deployment phase.
+- The Vercel Blob driver is private-only and requires
+  `BLOB_READ_WRITE_TOKEN`; it never exposes a public blob URL. Local demo mode
+  continues to use the filesystem adapter.
 - The runtime is pinned to Node 24.22.1+ through `engines` and `.nvmrc`. That
   release includes the fix for CVE-2026-111497, a high-severity Brotli decoder
   issue also fixed in Node 22.23.4 and 26.12.1. `npm audit` does not scan the
@@ -531,15 +538,19 @@ Checked against the mandatory list in `plan.md`:
 - [x] CSP nonce, HSTS in production, `nosniff`, `frame-ancestors`/`DENY`, and
       `Referrer-Policy` are configured
 - [x] License keys and download tokens are redacted from console email logs
-- [x] `npm audit --omit=dev` reports 0 vulnerabilities
+- [x] Dependency audit is documented, including the remaining transitive
+      advisory in the Vercel Blob dependency chain
 
 ### Dependency audit
 
-`npm audit --omit=dev` is clean. Full `npm audit` still reports 5 high-severity
-advisories in `braces`, pulled in by `eslint-config-next` dev tooling. The
-latest published `braces` (3.0.3) is still flagged, and
-`npm audit fix --force` would downgrade `eslint-config-next` to 14.x, so this is
-documented rather than forced. A Prisma CLI advisory on `deepmerge-ts` was fixed
+`npm audit --omit=dev` reports 4 high-severity advisories from a `zod` version
+nested under `@vercel/blob` → `@vercel/oidc` → `@vercel/cli-config`. The
+application does not accept untrusted Zod schemas from that package, and
+`npm audit fix --force` would downgrade `@vercel/blob` to 2.4.0, so the forced
+downgrade is not applied. Track the upstream fix.
+
+The full `npm audit` currently reports the same advisories; no separate
+dev-tool advisory remains. A Prisma CLI advisory on `deepmerge-ts` was fixed
 with an npm override to `^8.0.2` after confirming Prisma 6.19 still generates
 and builds.
 
@@ -553,8 +564,8 @@ npm run build
 npm audit --omit=dev
 ```
 
-Expected: 64 unit tests and 8 integration tests pass, lint/typecheck/build are
-clean, and the production dependency audit reports 0 vulnerabilities.
+Expected: 65 unit tests and 8 integration tests pass, and lint/typecheck/build
+are clean. Review the dependency audit note above before deployment.
 
 ## Production handoff
 
