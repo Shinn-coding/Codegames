@@ -13,3 +13,4 @@ storage/
 .freebuff/
 *.log
 .DS_Store
+plan.md
