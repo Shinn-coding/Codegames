@@ -50,17 +50,15 @@ export function ProductCard({
       )}
     >
       <div className="relative overflow-hidden rounded-inner">
-        <Link
-          href={href}
-          aria-label={`View ${product.name}`}
-          className="block"
-        >
+        <Link href={href} className="block">
+          <span className="sr-only">View {product.name}</span>
           <ProductCover
             name={product.name}
             category={product.category}
             version={product.version}
             gradient={product.coverGradient}
             className="aspect-[4/3] transition-transform duration-500 group-hover:scale-[1.02]"
+            ariaHidden={false}
           />
         </Link>
         {!available ? (
@@ -118,7 +116,7 @@ export function ProductCard({
               variant="outline"
               size="sm"
               className="shrink-0"
-              aria-label={`View details for ${product.name}`}
+              aria-label={`${available ? "View kit" : "Preview"} — ${product.name}`}
             >
               {available ? "View kit" : "Preview"}
               <ArrowGlyph />

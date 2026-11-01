@@ -31,7 +31,7 @@ export function CtaBand() {
                   <br />
                   the same foundation.
                 </h2>
-                <p className="mt-5 max-w-xl text-[14px] leading-7 text-forest/65 sm:text-[15px]">
+                <p className="mt-5 max-w-xl text-[14px] leading-7 text-forest/85 sm:text-[15px]">
                   Start from code that already handles the boring, risky parts.
                   Keep the architecture. Make the product yours.
                 </p>
@@ -55,7 +55,7 @@ export function CtaBand() {
                 >
                   Create an account
                 </ButtonLink>
-                <p className="mt-1 text-[9px] font-medium tracking-[0.12em] text-forest/45 uppercase lg:text-right">
+                <p className="mt-1 text-[9px] font-medium tracking-[0.12em] text-forest/80 uppercase lg:text-right">
                   Instant download · Lifetime updates
                 </p>
               </div>

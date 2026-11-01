@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { LicenseDownload } from "@/components/checkout/license-download";
 import { LicenseReveal } from "@/components/checkout/license-reveal";
+import { OrderStatusPoller } from "@/components/checkout/order-status-poller";
 import { PrintButton } from "@/components/checkout/print-button";
 import { PageShell } from "@/components/marketing/page-shell";
 
@@ -148,6 +149,13 @@ export default async function CheckoutSuccessPage({
             <p className="mt-4 max-w-xl text-sm leading-7 text-muted">
               {content.description}
             </p>
+            {order.provider === "midtrans" ? (
+              <OrderStatusPoller
+                key={order.orderNumber}
+                orderNumber={order.orderNumber}
+                status={order.status}
+              />
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 print:hidden">

@@ -68,7 +68,7 @@ export function Principles() {
                   <span className="grid size-12 place-items-center rounded-2xl border border-mint/15 bg-mint/10 text-mint">
                     {iconMap[principle.icon]}
                   </span>
-                  <span className="font-mono text-[9px] tracking-[0.18em] text-bg/30">
+                  <span className="font-mono text-[9px] tracking-[0.18em] text-bg/65">
                     0{index + 1}
                   </span>
                 </div>
@@ -76,13 +76,13 @@ export function Principles() {
                 <h3 className="relative mt-14 font-display text-[22px] leading-tight font-medium tracking-[-0.04em]">
                   {principle.title}
                 </h3>
-                <p className="relative mt-3 text-[13px] leading-6 text-bg/55">
+                <p className="relative mt-3 text-[13px] leading-6 text-bg/80">
                   {principle.description}
                 </p>
 
                 <div className="relative mt-auto flex items-center justify-between pt-8">
                   <span className="h-px flex-1 bg-white/10" />
-                  <span className="ml-3 font-mono text-[8px] tracking-[0.16em] text-bg/25 uppercase">
+                  <span className="ml-3 font-mono text-[8px] tracking-[0.16em] text-bg/65 uppercase">
                     0{index + 1} / 04
                   </span>
                 </div>

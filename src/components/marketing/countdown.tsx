@@ -70,7 +70,7 @@ export function Countdown({
       <div
         className={cn(
           "flex items-center gap-1.5 text-[8px] font-semibold tracking-[0.16em] uppercase",
-          light ? "text-bg/55" : "text-muted",
+          light ? "text-bg/80" : "text-muted",
         )}
       >
         <Clock size={12} weight="light" aria-hidden="true" />
@@ -107,7 +107,7 @@ export function Countdown({
               <span
                 className={cn(
                   "mt-1 block text-[7px] leading-none tracking-[0.12em] uppercase",
-                  light ? "text-bg/45" : "text-muted",
+                  light ? "text-bg/75" : "text-muted",
                 )}
               >
                 {segment.unit}

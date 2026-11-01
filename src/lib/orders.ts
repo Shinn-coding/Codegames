@@ -86,6 +86,29 @@ function isEventIdConflict(error: unknown): boolean {
   );
 }
 
+/**
+ * Neon can close an interactive transaction before Prisma finishes it. The
+ * write either committed or rolled back atomically, so replaying the whole
+ * idempotent event is safe.
+ */
+function isRetryableTransactionError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const code = "code" in error ? String(error.code) : "";
+
+  if (code === "P2028") {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message : "";
+
+  return /transaction (?:not found|already closed|api error)|closed transaction|timed out/i.test(
+    message,
+  );
+}
+
 async function findOrderWithRelations(
   orderNumber: string,
 ): Promise<OrderWithProduct | null> {
@@ -285,6 +308,17 @@ export async function recordPaymentEvent(
       return result;
     } catch (error) {
       lastError = error;
+
+      if (isRetryableTransactionError(error)) {
+        if (attempt < MAX_PAYMENT_EVENT_ATTEMPTS - 1) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 150 * (attempt + 1)),
+          );
+          continue;
+        }
+
+        throw error;
+      }
 
       if (!isUniqueConstraintError(error)) {
         throw error;

@@ -30,6 +30,7 @@ type ProductCoverProps = {
   version: string;
   gradient?: string | null;
   className?: string;
+  ariaHidden?: boolean;
 };
 
 export function ProductCover({
@@ -38,12 +39,13 @@ export function ProductCover({
   version,
   gradient,
   className,
+  ariaHidden = true,
 }: ProductCoverProps) {
   const background = coverGradients[gradient ?? ""] ?? coverGradients.mint;
 
   return (
     <div
-      aria-hidden="true"
+      aria-hidden={ariaHidden ? "true" : undefined}
       className={cn(
         "relative isolate overflow-hidden rounded-inner border border-white/15",
         className,

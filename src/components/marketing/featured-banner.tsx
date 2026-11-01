@@ -42,7 +42,7 @@ export function FeaturedBanner({ featured }: FeaturedBannerProps) {
                   <span className="text-mint">Every launch kit.</span>
                 </h2>
 
-                <p className="mt-6 max-w-lg text-[14px] leading-7 text-bg/55 sm:text-[15px]">
+                <p className="mt-6 max-w-lg text-[14px] leading-7 text-bg/80 sm:text-[15px]">
                   {featured?.tagline ??
                     "Every available kit in one launch-ready bundle."}{" "}
                   Skip the assembly tax and start with the whole shelf.
@@ -52,7 +52,7 @@ export function FeaturedBanner({ featured }: FeaturedBannerProps) {
                   {included.map((item) => (
                     <li
                       key={item}
-                      className="flex items-center gap-2.5 text-[12px] text-bg/65"
+                      className="flex items-center gap-2.5 text-[12px] text-bg/85"
                     >
                       <span className="grid size-5 shrink-0 place-items-center rounded-full border border-mint/20 bg-mint/10 text-mint">
                         <Check size={10} weight="bold" aria-hidden="true" />
@@ -69,12 +69,12 @@ export function FeaturedBanner({ featured }: FeaturedBannerProps) {
                         {featured?.effectivePriceLabel ?? "See current price"}
                       </span>
                       {featured?.compareAtLabel ? (
-                        <span className="font-mono text-[11px] text-bg/35 line-through">
+                        <span className="font-mono text-[11px] text-bg/70 line-through">
                           {featured.compareAtLabel}
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-1 text-[9px] font-semibold tracking-[0.16em] text-bg/35 uppercase">
+                    <p className="mt-1 text-[9px] font-semibold tracking-[0.16em] text-bg/70 uppercase">
                       One-time license · Lifetime updates
                     </p>
                   </div>
@@ -145,7 +145,7 @@ export function FeaturedBanner({ featured }: FeaturedBannerProps) {
                   </div>
 
                   <div className="absolute -top-1 -right-1 rotate-[6deg] rounded-2xl border border-white/15 bg-forest-2 px-4 py-3 text-bg shadow-xl">
-                    <p className="text-[8px] font-semibold tracking-[0.16em] text-mint/60 uppercase">
+                    <p className="text-[8px] font-semibold tracking-[0.16em] text-mint/75 uppercase">
                       Includes
                     </p>
                     <p className="mt-0.5 font-display text-lg font-semibold">

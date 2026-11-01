@@ -12,7 +12,7 @@ export function SiteFooter() {
         <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr]">
           <div>
             <Logo tone="light" />
-            <p className="mt-6 max-w-sm text-[13px] leading-7 text-bg/50">
+            <p className="mt-6 max-w-sm text-[13px] leading-7 text-bg/75">
               Production-ready source code, boilerplates, and developer kits.
               Buy once, ship faster, own the code.
             </p>
@@ -29,7 +29,7 @@ export function SiteFooter() {
           >
             {siteConfig.footer.columns.map((column) => (
               <div key={column.title}>
-                <p className="text-[9px] font-semibold tracking-[0.18em] text-mint/55 uppercase">
+                <p className="text-[9px] font-semibold tracking-[0.18em] text-mint/80 uppercase">
                   {column.title}
                 </p>
                 <ul className="mt-4 space-y-3">
@@ -37,7 +37,7 @@ export function SiteFooter() {
                     <li key={link.href}>
                       <Link
                         href={link.href}
-                        className="group inline-flex items-center gap-1.5 text-[12px] text-bg/60 transition-colors hover:text-bg"
+                        className="group inline-flex items-center gap-1.5 text-[12px] text-bg/80 transition-colors hover:text-bg"
                       >
                         {link.label}
                         <ArrowUpRight
@@ -55,7 +55,7 @@ export function SiteFooter() {
           </nav>
         </div>
 
-        <div className="mt-14 flex flex-col gap-4 border-t border-white/10 pt-6 text-[10px] tracking-[0.06em] text-bg/35 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-14 flex flex-col gap-4 border-t border-white/10 pt-6 text-[10px] tracking-[0.06em] text-bg/70 sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} CodeGems. All rights reserved.</p>
           <p className="flex items-center gap-2">
             <span

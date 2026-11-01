@@ -95,7 +95,13 @@ export async function POST(request: Request) {
       signature: notification.signature_key,
     })
   ) {
-    return json({ error: "Invalid webhook signature." }, { status: 401 });
+    // Midtrans can sign notifications with a different server key than the
+    // one used for Snap/status requests. The notification is only a trigger:
+    // every state change below is derived from the authenticated status API,
+    // so a signature mismatch must not prevent reconciliation.
+    console.warn(
+      `[midtrans] Notification signature mismatch for ${notification.order_id}; verifying with the status API.`,
+    );
   }
 
   let remote;
@@ -156,9 +162,9 @@ export async function POST(request: Request) {
       provider: "midtrans",
       eventId: buildMidtransEventId({
         orderId: remote.order_id,
-        transactionId: remote.transaction_id ?? notification.transaction_id,
+        transactionId: remote.transaction_id,
         transactionStatus: remote.transaction_status,
-        fraudStatus: remote.fraud_status ?? notification.fraud_status,
+        fraudStatus: remote.fraud_status,
       }),
       orderNumber: remote.order_id,
       status: nextStatus,

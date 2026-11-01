@@ -67,14 +67,14 @@ export function Hero({ settings, featured, featuredSeconds }: HeroProps) {
                 {siteConfig.hero.eyebrow}
               </Badge>
               <span className="h-px w-10 bg-bg/20" aria-hidden="true" />
-              <span className="font-mono text-[9px] tracking-[0.18em] text-bg/40 uppercase">
+              <span className="font-mono text-[9px] tracking-[0.18em] text-bg/75 uppercase">
                 Est. 2026 / IDR
               </span>
             </div>
 
             <h1 className="font-display text-[clamp(3.15rem,5.1vw,4.35rem)] leading-[0.9] font-semibold tracking-[-0.06em] text-bg">
               {lead ? (
-                <span className="block text-bg/50">{lead}</span>
+                <span className="block text-bg/70">{lead}</span>
               ) : null}
               <span className="block">
                 <span className="sm:whitespace-nowrap">{emphasis}</span>{" "}
@@ -82,7 +82,7 @@ export function Hero({ settings, featured, featuredSeconds }: HeroProps) {
               </span>
             </h1>
 
-            <p className="mt-7 max-w-xl text-[15px] leading-7 text-bg/60 sm:text-[17px] sm:leading-8">
+            <p className="mt-7 max-w-xl text-[15px] leading-7 text-bg/80 sm:text-[17px] sm:leading-8">
               {settings.subheadline}
             </p>
 
@@ -104,7 +104,7 @@ export function Hero({ settings, featured, featuredSeconds }: HeroProps) {
               {siteConfig.hero.trust.map((item) => (
                 <li
                   key={item}
-                  className="flex items-center gap-2 text-[10px] font-medium tracking-[0.12em] text-bg/45 uppercase"
+                  className="flex items-center gap-2 text-[10px] font-medium tracking-[0.12em] text-bg/75 uppercase"
                 >
                   <span className="grid size-4 place-items-center rounded-full border border-mint/25 bg-mint/10 text-mint">
                     <Check size={9} weight="bold" aria-hidden="true" />

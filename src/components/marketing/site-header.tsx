@@ -128,8 +128,8 @@ export function SiteHeader({ announcement, isSignedIn }: SiteHeaderProps) {
                   className={cn(
                     "relative text-[13px] font-medium transition-colors",
                     darkText
-                      ? "text-ink/60 hover:text-ink"
-                      : "text-bg/60 hover:text-bg",
+                      ? "text-ink/70 hover:text-ink"
+                      : "text-bg/80 hover:text-bg",
                     active && (darkText ? "text-ink" : "text-bg"),
                     active &&
                       "after:absolute after:-bottom-2 after:left-0 after:h-px after:w-full after:bg-current",
@@ -145,7 +145,7 @@ export function SiteHeader({ announcement, isSignedIn }: SiteHeaderProps) {
             <span
               className={cn(
                 "font-mono text-[9px] tracking-[0.18em]",
-                darkText ? "text-muted" : "text-bg/40",
+                darkText ? "text-muted" : "text-bg/75",
               )}
             >
               IDR

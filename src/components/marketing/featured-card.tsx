@@ -66,13 +66,13 @@ export function FeaturedCard({
               <span className="size-1.5 rounded-full bg-[#f08f74]" />
               <span className="size-1.5 rounded-full bg-[#d9a441]" />
               <span className="size-1.5 rounded-full bg-mint" />
-              <span className="ml-auto font-mono text-[8px] tracking-[0.12em] text-bg/35 uppercase">
+              <span className="ml-auto font-mono text-[8px] tracking-[0.12em] text-bg/70 uppercase">
                 launch.ts
               </span>
             </div>
-            <div className="space-y-1.5 p-3 font-mono text-[8px] leading-[1.7] text-bg/55 sm:p-4 sm:text-[9.5px]">
+            <div className="space-y-1.5 p-3 font-mono text-[8px] leading-[1.7] text-bg/80 sm:p-4 sm:text-[9.5px]">
               <p>
-                <span className="text-bg/20">01</span>{" "}
+                <span className="text-bg/60">01</span>{" "}
                 <span className="text-mint">import</span>{" "}
                 <span className="text-bg/80">{"{ checkout, license }"}</span>{" "}
                 <span className="text-mint">from</span>{" "}
@@ -81,18 +81,18 @@ export function FeaturedCard({
                 </span>
               </p>
               <p>
-                <span className="text-bg/20">02</span>{" "}
-                <span className="text-bg/65">const</span> product ={" "}
+                <span className="text-bg/60">02</span>{" "}
+                <span className="text-bg/80">const</span> product ={" "}
                 <span className="text-mint">await</span> checkout.
                 <span className="text-[#9ec4d8]">create</span>(order)
               </p>
               <p>
-                <span className="text-bg/20">03</span>{" "}
-                <span className="text-bg/65">await</span> license.
+                <span className="text-bg/60">03</span>{" "}
+                <span className="text-bg/80">await</span> license.
                 <span className="text-[#9ec4d8]">issue</span>(product)
               </p>
               <p className="flex items-center gap-1.5">
-                <span className="text-bg/20">04</span>{" "}
+                <span className="text-bg/60">04</span>{" "}
                 <span className="text-mint">export default</span> ship(product)
                 <span className="inline-block h-3 w-1 bg-mint/80 motion-safe:animate-[ticker_1.4s_ease-in-out_infinite]" />
               </p>
@@ -110,7 +110,7 @@ export function FeaturedCard({
               </p>
             </div>
             <div className="hidden w-[126px] shrink-0 rotate-[-5deg] rounded-2xl border border-white/15 bg-[#1d3a2f] p-3 shadow-xl motion-safe:animate-[float_9s_ease-in-out_infinite] sm:block">
-              <p className="text-[7px] font-semibold tracking-[0.16em] text-mint/55 uppercase">
+              <p className="text-[7px] font-semibold tracking-[0.16em] text-mint/75 uppercase">
                 Included
               </p>
               <p className="mt-1 font-display text-sm font-medium text-bg">

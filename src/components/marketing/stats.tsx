@@ -24,7 +24,7 @@ export function Stats({ licenses, gmv, uptime }: StatsProps) {
             <div key={stat.label} className="h-full bg-bg">
               <Reveal delay={index * 0.06} className="h-full">
                 <div className="flex h-full flex-col justify-between p-6 sm:p-8 md:p-9">
-                  <span className="font-mono text-[9px] tracking-[0.18em] text-muted/70">
+                  <span className="font-mono text-[9px] tracking-[0.18em] text-muted">
                     0{index + 1}
                   </span>
                   <p className="mt-8 font-mono text-[clamp(2.5rem,4.6vw,4.4rem)] leading-none font-medium tracking-[-0.08em] text-ink tabular-nums">
