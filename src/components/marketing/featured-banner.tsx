@@ -135,7 +135,7 @@ export function FeaturedBanner({ featured }: FeaturedBannerProps) {
                     </div>
                   </div>
 
-                  <div className="absolute -bottom-1 -left-1 rotate-[5deg] rounded-2xl border border-white/15 bg-mint px-4 py-3 text-forest shadow-xl motion-safe:animate-[float_8s_ease-in-out_infinite]">
+                  <div className="absolute -bottom-1 -left-1 rotate-[5deg] rounded-2xl border border-white/15 bg-mint px-4 py-3 text-forest shadow-xl">
                     <p className="text-[8px] font-semibold tracking-[0.16em] uppercase">
                       {savings ? "Early bird" : "Bundle saving"}
                     </p>

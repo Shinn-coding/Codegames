@@ -94,7 +94,7 @@ export function FeaturedCard({
               <p className="flex items-center gap-1.5">
                 <span className="text-bg/60">04</span>{" "}
                 <span className="text-mint">export default</span> ship(product)
-                <span className="inline-block h-3 w-1 bg-mint/80 motion-safe:animate-[ticker_1.4s_ease-in-out_infinite]" />
+                <span className="inline-block h-3 w-1 bg-mint/80" />
               </p>
             </div>
           </div>
@@ -109,7 +109,7 @@ export function FeaturedCard({
                 Three kits. One license.
               </p>
             </div>
-            <div className="hidden w-[126px] shrink-0 rotate-[-5deg] rounded-2xl border border-white/15 bg-[#1d3a2f] p-3 shadow-xl motion-safe:animate-[float_9s_ease-in-out_infinite] sm:block">
+            <div className="hidden w-[126px] shrink-0 rotate-[-5deg] rounded-2xl border border-white/15 bg-[#1d3a2f] p-3 shadow-xl sm:block">
               <p className="text-[7px] font-semibold tracking-[0.16em] text-mint/75 uppercase">
                 Included
               </p>
