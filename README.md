@@ -400,59 +400,59 @@ Prisma CLI loads `.env`; Next.js loads `.env.local`. This workspace uses
 
 ## Scripts
 
-| Command                    | Purpose                                                  |
-| -------------------------- | -------------------------------------------------------- |
-| `npm run dev`              | Start Next.js on port 3000                               |
-| `npm run build`            | Production build                                         |
-| `npm run lint`             | ESLint                                                   |
-| `npm run typecheck`        | `tsc --noEmit`                                           |
-| `npm test`                 | Unit tests (no database required)                        |
-| `npm run test:integration` | Database lifecycle tests against `.env`                  |
-| `npm run test:all`         | Unit and integration tests                               |
+| Command                    | Purpose                                                     |
+| -------------------------- | ----------------------------------------------------------- |
+| `npm run dev`              | Start Next.js on port 3000                                  |
+| `npm run build`            | Production build                                            |
+| `npm run lint`             | ESLint                                                      |
+| `npm run typecheck`        | `tsc --noEmit`                                              |
+| `npm test`                 | Unit tests (no database required)                           |
+| `npm run test:integration` | Database lifecycle tests against `.env`                     |
+| `npm run test:all`         | Unit and integration tests                                  |
 | `npm run db:deploy`        | Apply committed migrations (local first run and production) |
-| `npm run db:push`          | Sync schema without migration history (prototyping only) |
-| `npm run db:seed`          | Seed demo users, products, settings, and delivery files  |
-| `npm run db:migrate`       | Create a new migration during development                |
-| `npm run db:studio`        | Prisma Studio                                            |
-| `npm run db:dev`           | Start Prisma dev server (foreground)                     |
+| `npm run db:push`          | Sync schema without migration history (prototyping only)    |
+| `npm run db:seed`          | Seed demo users, products, settings, and delivery files     |
+| `npm run db:migrate`       | Create a new migration during development                   |
+| `npm run db:studio`        | Prisma Studio                                               |
+| `npm run db:dev`           | Start Prisma dev server (foreground)                        |
 
 ## Routes
 
-| Route                                 | Access                                                          |
-| ------------------------------------- | --------------------------------------------------------------- |
-| `/`                                   | Public landing page                                             |
-| `/products`                           | Public catalog with category filter and allow-listed sort       |
-| `/products/[slug]`                    | Public product detail; `COMING_SOON` items are not purchasable  |
-| `/pricing`                            | Public license comparison                                       |
-| `/changelog`                          | Public release history                                          |
-| `/login`                              | Public when signed out; redirects when signed in                |
-| `/dev-login`                          | Demo-only dev sign-in (disabled in production)                  |
-| `/dashboard`                          | Authenticated; owner-scoped account summary and recent activity |
-| `/dashboard/orders`                   | Authenticated owner; order list and status filters              |
-| `/dashboard/orders/[n]/invoice`       | Authenticated owner; printable invoice                          |
-| `/dashboard/licenses`                 | Authenticated owner; masked keys and download actions           |
-| `/dashboard/downloads`                | Authenticated owner; download history                           |
-| `/admin`                              | ADMIN role only; overview, revenue, recent activity             |
-| `/admin/products`                     | ADMIN; catalog list                                             |
-| `/admin/products/new`                 | ADMIN; create product                                           |
-| `/admin/products/[id]`                | ADMIN; edit product, status, delivery files                     |
-| `/admin/orders`                       | ADMIN; orders, filters, search, pagination                      |
-| `/admin/licenses`                     | ADMIN; revoke and resend access                                 |
-| `/admin/settings`                     | ADMIN; landing copy and featured kit                            |
-| `/admin/audit`                        | ADMIN; last 100 audited mutations                               |
-| `/checkout/mock`                      | Authenticated owner; demo payment simulator                     |
-| `/checkout/success`                   | Authenticated owner; receipt, payment status, license           |
-| `POST /api/checkout`                  | Authenticated user; 5 requests/minute/user                      |
-| `POST /api/webhooks/midtrans`         | Midtrans signature; 120 requests/minute/IP                      |
-| `POST /api/licenses/activate`         | Public; key + instance ID; 10 requests/minute/IP                |
-| `POST /api/licenses/reveal`           | Authenticated owner; consumes the one-time reveal cookie        |
-| `POST /api/licenses/[id]/download`    | Authenticated owner; 10 requests/minute/user                    |
-| `POST /api/admin/products/[id]/files` | ADMIN; 60 requests/minute/user; 50 MB; magic-byte checked       |
-| `POST /api/admin/products/[id]/files/upload` | ADMIN; private Blob client-token route; 60/minute/user   |
-| `POST /api/admin/products/[id]/files/finalize` | ADMIN; validates uploaded Blob bytes and records metadata |
-| `GET /api/download/[token]`           | Bearer token; 30 requests/minute/IP                             |
-| `/api/auth/*`                         | Auth.js handlers                                                |
-| `/api/health`                         | Public JSON health check                                        |
+| Route                                          | Access                                                          |
+| ---------------------------------------------- | --------------------------------------------------------------- |
+| `/`                                            | Public landing page                                             |
+| `/products`                                    | Public catalog with category filter and allow-listed sort       |
+| `/products/[slug]`                             | Public product detail; `COMING_SOON` items are not purchasable  |
+| `/pricing`                                     | Public license comparison                                       |
+| `/changelog`                                   | Public release history                                          |
+| `/login`                                       | Public when signed out; redirects when signed in                |
+| `/dev-login`                                   | Demo-only dev sign-in (disabled in production)                  |
+| `/dashboard`                                   | Authenticated; owner-scoped account summary and recent activity |
+| `/dashboard/orders`                            | Authenticated owner; order list and status filters              |
+| `/dashboard/orders/[n]/invoice`                | Authenticated owner; printable invoice                          |
+| `/dashboard/licenses`                          | Authenticated owner; masked keys and download actions           |
+| `/dashboard/downloads`                         | Authenticated owner; download history                           |
+| `/admin`                                       | ADMIN role only; overview, revenue, recent activity             |
+| `/admin/products`                              | ADMIN; catalog list                                             |
+| `/admin/products/new`                          | ADMIN; create product                                           |
+| `/admin/products/[id]`                         | ADMIN; edit product, status, delivery files                     |
+| `/admin/orders`                                | ADMIN; orders, filters, search, pagination                      |
+| `/admin/licenses`                              | ADMIN; revoke and resend access                                 |
+| `/admin/settings`                              | ADMIN; landing copy and featured kit                            |
+| `/admin/audit`                                 | ADMIN; last 100 audited mutations                               |
+| `/checkout/mock`                               | Authenticated owner; demo payment simulator                     |
+| `/checkout/success`                            | Authenticated owner; receipt, payment status, license           |
+| `POST /api/checkout`                           | Authenticated user; 5 requests/minute/user                      |
+| `POST /api/webhooks/midtrans`                  | Midtrans signature; 120 requests/minute/IP                      |
+| `POST /api/licenses/activate`                  | Public; key + instance ID; 10 requests/minute/IP                |
+| `POST /api/licenses/reveal`                    | Authenticated owner; consumes the one-time reveal cookie        |
+| `POST /api/licenses/[id]/download`             | Authenticated owner; 10 requests/minute/user                    |
+| `POST /api/admin/products/[id]/files`          | ADMIN; 60 requests/minute/user; 50 MB; magic-byte checked       |
+| `POST /api/admin/products/[id]/files/upload`   | ADMIN; private Blob client-token route; 60/minute/user          |
+| `POST /api/admin/products/[id]/files/finalize` | ADMIN; validates uploaded Blob bytes and records metadata       |
+| `GET /api/download/[token]`                    | Bearer token; 30 requests/minute/IP                             |
+| `/api/auth/*`                                  | Auth.js handlers                                                |
+| `/api/health`                                  | Public JSON health check                                        |
 
 ## Security notes
 
@@ -500,12 +500,16 @@ Prisma CLI loads `.env`; Next.js loads `.env.local`. This workspace uses
 - Every customer and admin query is scoped server-side. A foreign order number
   in `/dashboard/orders/[n]/invoice` returns `404`.
 - CSP is generated per request in `src/proxy.ts` (Next.js 16's replacement for
-  middleware); development adds `'unsafe-eval'` and websocket origins for
-  Next.js HMR only.
-- HSTS is emitted only in production. Other security headers are always on.
-- The rate limiter uses an atomic Postgres upsert. Checkout, webhook, license
-  activation, license reveal, download issuance, token downloads, and admin
-  uploads use it today.
+  middleware). The same policy is sent on the request and response so Next.js
+  can apply the matching nonce to framework and page scripts. Development adds
+  `'unsafe-eval'` and websocket origins for Next.js HMR only.
+- HSTS is emitted only in production. Other security headers are always on,
+  including cross-origin opener/resource policies, `nosniff`, frame denial,
+  and a restrictive permissions policy.
+- The rate limiter uses an atomic Postgres upsert. Auth reads/writes, checkout,
+  webhook, license activation, license reveal, download issuance, token
+  downloads, and admin uploads use it today. Old rate-limit windows are pruned
+  opportunistically.
 - The Vercel Blob driver is private-only and requires
   `BLOB_READ_WRITE_TOKEN`; it never exposes a public blob URL. Local demo mode
   continues to use the filesystem adapter.
@@ -535,8 +539,8 @@ Checked against the mandatory list in `plan.md`:
       two-use cap, and no public blob URL
 - [x] Uploads are admin-only, size-capped, magic-byte checked, and stored under
       generated names
-- [x] CSP nonce, HSTS in production, `nosniff`, `frame-ancestors`/`DENY`, and
-      `Referrer-Policy` are configured
+- [x] CSP nonce, HSTS in production, `nosniff`, `frame-ancestors`/`DENY`,
+      cross-origin isolation headers, and `Referrer-Policy` are configured
 - [x] License keys and download tokens are redacted from console email logs
 - [x] Dependency audit is documented, including the remaining transitive
       advisory in the Vercel Blob dependency chain
@@ -564,7 +568,7 @@ npm run build
 npm audit --omit=dev
 ```
 
-Expected: 65 unit tests and 8 integration tests pass, and lint/typecheck/build
+Expected: 85 unit tests and 11 integration tests pass, and lint/typecheck/build
 are clean. Review the dependency audit note above before deployment.
 
 ## Production handoff
@@ -592,7 +596,9 @@ CI configuration in scope. To deploy later:
 6. **HTTPS and headers** — run with `NODE_ENV=production` so HSTS is emitted.
    The CSP is generated per request in `src/proxy.ts`.
 7. **Rate limits** — place the app behind a proxy that overwrites
-   `X-Forwarded-For`; the limiter hashes the first hop.
+   `X-Forwarded-For`; the limiter hashes the first hop. Auth writes are capped
+   at 20/min/IP, auth reads at 120/min/IP, and the other route budgets are
+   documented in `plan.md`.
 8. **Backups/monitoring** — not configured. Add database backups and error
    monitoring before taking real payments.
 

@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { buildContentSecurityPolicy } from "@/lib/security-headers";
+
 const SESSION_COOKIE_NAMES = [
   "authjs.session-token",
   "__Secure-authjs.session-token",
@@ -16,25 +18,22 @@ export default function proxy(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID());
   const isDevelopment = process.env.NODE_ENV !== "production";
 
-  const contentSecurityPolicy = [
-    "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${
-      isDevelopment ? " 'unsafe-eval'" : ""
-    }`,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https:",
-    "font-src 'self' data:",
-    `connect-src 'self' https://blob.vercel-storage.com https://*.blob.vercel-storage.com${
-      isDevelopment ? " ws: wss:" : ""
-    }`,
-    "frame-ancestors 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "object-src 'none'",
-  ].join("; ");
+  const contentSecurityPolicy = buildContentSecurityPolicy({
+    nonce,
+    isDevelopment,
+    // Keep local `next start` usable over http:// while still upgrading
+    // subresources on the real https deployment.
+    upgradeInsecureRequests:
+      !isDevelopment &&
+      (process.env.NEXT_PUBLIC_APP_URL ?? "").startsWith("https://"),
+  });
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
+  // Next.js extracts the nonce from the request CSP header during rendering.
+  // Without this header, framework scripts receive a different nonce and the
+  // browser blocks them because 'strict-dynamic' is enabled.
+  requestHeaders.set("Content-Security-Policy", contentSecurityPolicy);
 
   const response = NextResponse.next({
     request: { headers: requestHeaders },
@@ -58,7 +57,10 @@ export default function proxy(request: NextRequest) {
       "callbackUrl",
       `${request.nextUrl.pathname}${request.nextUrl.search}`,
     );
-    return NextResponse.redirect(loginUrl);
+
+    const redirect = NextResponse.redirect(loginUrl);
+    redirect.headers.set("Content-Security-Policy", contentSecurityPolicy);
+    return redirect;
   }
 
   return response;

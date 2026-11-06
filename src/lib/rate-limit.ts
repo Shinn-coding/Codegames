@@ -13,6 +13,24 @@ type RateLimitOptions = {
   windowMs: number;
 };
 
+const RATE_LIMIT_RETENTION_MS = 24 * 60 * 60 * 1_000;
+const RATE_LIMIT_CLEANUP_INTERVAL_MS = 60 * 60 * 1_000;
+let lastCleanupAt = 0;
+
+async function cleanupExpiredWindows(now: number): Promise<void> {
+  if (now - lastCleanupAt < RATE_LIMIT_CLEANUP_INTERVAL_MS) {
+    return;
+  }
+
+  lastCleanupAt = now;
+
+  await prisma.rateLimit
+    .deleteMany({
+      where: { windowStart: { lt: new Date(now - RATE_LIMIT_RETENTION_MS) } },
+    })
+    .catch(() => undefined);
+}
+
 /**
  * Fixed-window rate limit backed by Postgres.
  *
@@ -36,6 +54,8 @@ export async function checkRateLimit({
   `;
 
   const count = Number(rows[0]?.count ?? 1);
+
+  await cleanupExpiredWindows(now);
 
   return {
     allowed: count <= limit,
