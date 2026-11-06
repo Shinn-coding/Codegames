@@ -87,6 +87,17 @@ async function seedDemoProductFile(
       sizeBytes: bytes.byteLength,
       checksumSha256,
       isCurrent: true,
+      scanStatus: "CLEAN",
+      scanReport: {
+        status: "CLEAN",
+        findings: [],
+        metadata: { source: "local-seed" },
+      },
+      scannedAt: new Date(),
+      reviewStatus: "APPROVED",
+      reviewedBy: "local-seed",
+      reviewedAt: new Date(),
+      reviewNote: "Local demo fixture; not a production upload.",
     },
     create: {
       productId: product.id,
@@ -97,6 +108,17 @@ async function seedDemoProductFile(
       sizeBytes: bytes.byteLength,
       checksumSha256,
       isCurrent: true,
+      scanStatus: "CLEAN",
+      scanReport: {
+        status: "CLEAN",
+        findings: [],
+        metadata: { source: "local-seed" },
+      },
+      scannedAt: new Date(),
+      reviewStatus: "APPROVED",
+      reviewedBy: "local-seed",
+      reviewedAt: new Date(),
+      reviewNote: "Local demo fixture; not a production upload.",
     },
   });
 

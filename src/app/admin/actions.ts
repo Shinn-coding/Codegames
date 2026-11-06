@@ -19,10 +19,14 @@ import {
 } from "@/lib/admin-licenses";
 import {
   AdminProductNotFoundError,
+  ProductFileApprovalError,
   ProductFileNotFoundError,
   ProductSlugTakenError,
+  approveProductFile,
   createAdminProduct,
   deleteProductFile,
+  reanalyzeProductFile,
+  rejectProductFile,
   setCurrentProductFile,
   setProductStatus,
   updateAdminProduct,
@@ -114,7 +118,10 @@ export async function createProductAction(
       };
     }
 
-    console.error("[admin] Could not create the product.", describeError(error));
+    console.error(
+      "[admin] Could not create the product.",
+      describeError(error),
+    );
     return {
       status: "error",
       message: "The product could not be created. Try again.",
@@ -168,7 +175,10 @@ export async function updateProductAction(
       return { status: "error", message: "That product no longer exists." };
     }
 
-    console.error("[admin] Could not update the product.", describeError(error));
+    console.error(
+      "[admin] Could not update the product.",
+      describeError(error),
+    );
     return {
       status: "error",
       message: "The product could not be saved. Try again.",
@@ -180,7 +190,9 @@ export async function updateProductAction(
   redirect(`/admin/products/${productId}?saved=1`);
 }
 
-export async function setProductStatusAction(formData: FormData): Promise<void> {
+export async function setProductStatusAction(
+  formData: FormData,
+): Promise<void> {
   const user = await requireAdminAction();
   const productId = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "");
@@ -190,8 +202,7 @@ export async function setProductStatusAction(formData: FormData): Promise<void> 
   }
 
   const nextStatus = PRODUCT_STATUSES.find((value) => value === status) as
-    | ProductStatusValue
-    | undefined;
+    ProductStatusValue | undefined;
 
   if (!nextStatus) {
     redirect(`/admin/products/${productId}?error=Invalid+status`);
@@ -251,6 +262,123 @@ export async function setCurrentFileAction(formData: FormData): Promise<void> {
 
   revalidatePath(`/admin/products/${productId}`);
   redirect(`/admin/products/${productId}?file=current`);
+}
+
+export async function rescanFileAction(formData: FormData): Promise<void> {
+  const user = await requireAdminAction();
+  const productId = String(formData.get("productId") ?? "");
+  const fileId = String(formData.get("fileId") ?? "");
+
+  if (!isId(productId) || !isId(fileId)) {
+    redirect("/admin/products");
+  }
+
+  try {
+    await reanalyzeProductFile({
+      productId,
+      fileId,
+      actorId: user.id,
+      ipHash: await getRequestIpHash(),
+    });
+  } catch (error) {
+    if (
+      error instanceof ProductFileNotFoundError ||
+      error instanceof ProductFileApprovalError
+    ) {
+      redirect(
+        `/admin/products/${productId}?error=${encodeURIComponent(
+          error.message,
+        )}`,
+      );
+    }
+
+    redirect(
+      `/admin/products/${productId}?error=${encodeURIComponent(
+        describeError(error),
+      )}`,
+    );
+  }
+
+  revalidatePath(`/admin/products/${productId}`);
+  revalidatePath("/admin/audit");
+  redirect(`/admin/products/${productId}?file=scanned`);
+}
+
+export async function approveFileAction(formData: FormData): Promise<void> {
+  const user = await requireAdminAction();
+  const productId = String(formData.get("productId") ?? "");
+  const fileId = String(formData.get("fileId") ?? "");
+  const note = String(formData.get("note") ?? "");
+
+  if (!isId(productId) || !isId(fileId)) {
+    redirect("/admin/products");
+  }
+
+  try {
+    await approveProductFile({
+      productId,
+      fileId,
+      note,
+      actorId: user.id,
+      ipHash: await getRequestIpHash(),
+    });
+  } catch (error) {
+    if (
+      error instanceof ProductFileNotFoundError ||
+      error instanceof ProductFileApprovalError
+    ) {
+      redirect(
+        `/admin/products/${productId}?error=${encodeURIComponent(
+          error.message,
+        )}`,
+      );
+    }
+
+    redirect(
+      `/admin/products/${productId}?error=${encodeURIComponent(
+        describeError(error),
+      )}`,
+    );
+  }
+
+  revalidatePath(`/admin/products/${productId}`);
+  revalidatePath("/admin/audit");
+  redirect(`/admin/products/${productId}?file=approved`);
+}
+
+export async function rejectFileAction(formData: FormData): Promise<void> {
+  const user = await requireAdminAction();
+  const productId = String(formData.get("productId") ?? "");
+  const fileId = String(formData.get("fileId") ?? "");
+  const note = String(formData.get("note") ?? "");
+
+  if (!isId(productId) || !isId(fileId)) {
+    redirect("/admin/products");
+  }
+
+  try {
+    await rejectProductFile({
+      productId,
+      fileId,
+      note,
+      actorId: user.id,
+      ipHash: await getRequestIpHash(),
+    });
+  } catch (error) {
+    if (error instanceof ProductFileNotFoundError) {
+      redirect(`/admin/products/${productId}?error=File+not+found`);
+    }
+
+    redirect(
+      `/admin/products/${productId}?error=${encodeURIComponent(
+        describeError(error),
+      )}`,
+    );
+  }
+
+  revalidatePath(`/admin/products/${productId}`);
+  revalidatePath("/admin/audit");
+  redirect(`/admin/products/${productId}?file=rejected`);
 }
 
 export async function deleteFileAction(formData: FormData): Promise<void> {

@@ -99,7 +99,12 @@ async function issueDownloadLink(
   }
 
   const productFile = await prisma.productFile.findFirst({
-    where: { productId: license.productId, isCurrent: true },
+    where: {
+      productId: license.productId,
+      isCurrent: true,
+      reviewStatus: "APPROVED",
+      scanStatus: { in: ["CLEAN", "SUSPICIOUS"] },
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -227,7 +232,12 @@ export async function consumeDownloadToken(input: {
     }
 
     const currentFile = await tx.productFile.findFirst({
-      where: { productId: record.license.productId, isCurrent: true },
+      where: {
+        productId: record.license.productId,
+        isCurrent: true,
+        reviewStatus: "APPROVED",
+        scanStatus: { in: ["CLEAN", "SUSPICIOUS"] },
+      },
       orderBy: { createdAt: "desc" },
     });
 

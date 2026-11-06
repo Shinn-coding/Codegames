@@ -12,11 +12,21 @@ import {
   detectUpload,
   sanitizeUploadFileName,
 } from "@/lib/upload-core";
+import { analyzeUpload, isBlockedScanStatus } from "@/lib/upload-security";
 
 export const runtime = "nodejs";
 
 const RATE_LIMIT_PER_MINUTE = 60;
 const MULTIPART_OVERHEAD_BYTES = 1024 * 1024;
+
+function scanRejectionMessage(report: {
+  findings: Array<{ severity: string; message: string }>;
+}): string {
+  const block = report.findings.find((finding) => finding.severity === "block");
+  return block
+    ? `File blocked: ${block.message}`
+    : "The file could not be analyzed safely.";
+}
 
 function json(
   body: Record<string, unknown>,
@@ -142,6 +152,22 @@ export async function POST(
     );
   }
 
+  const scanReport = await analyzeUpload({
+    bytes,
+    fileName: file.name,
+    detected,
+  });
+
+  if (isBlockedScanStatus(scanReport.status)) {
+    return json(
+      {
+        error: scanRejectionMessage(scanReport),
+        scan: scanReport,
+      },
+      { status: 422 },
+    );
+  }
+
   try {
     const saved = await saveProductFile({
       product,
@@ -150,6 +176,7 @@ export async function POST(
       extension: detected.extension,
       mimeType: detected.mimeType,
       bytes,
+      scanReport,
       actorId: session.user.id,
       ipHash: hashClientIp(getClientIp(request)),
     });
@@ -163,7 +190,10 @@ export async function POST(
           fileName: saved.fileName,
           sizeBytes: saved.sizeBytes,
           isCurrent: saved.isCurrent,
+          scanStatus: saved.scanStatus,
+          reviewStatus: saved.reviewStatus,
         },
+        scan: scanReport,
       },
       { status: 201 },
     );

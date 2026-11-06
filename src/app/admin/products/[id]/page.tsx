@@ -1,7 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowSquareOut, FileArrowUp, Trash } from "@phosphor-icons/react/ssr";
+import {
+  ArrowLeft,
+  ArrowSquareOut,
+  Check,
+  FileArrowUp,
+  ShieldCheck,
+  Trash,
+  Warning,
+  X,
+} from "@phosphor-icons/react/ssr";
 
 import { requireAdmin } from "@/lib/auth-guards";
 import { toDateTimeLocalValue } from "@/lib/admin-core";
@@ -9,8 +18,12 @@ import { getAdminProduct } from "@/lib/admin-products";
 import { env } from "@/lib/env";
 import { formatBytes, formatDate, formatIdr } from "@/lib/format";
 import { parseReleases } from "@/lib/marketing";
+import type { UploadScanReport } from "@/lib/upload-security";
 import {
+  approveFileAction,
   deleteFileAction,
+  rejectFileAction,
+  rescanFileAction,
   setCurrentFileAction,
   setProductStatusAction,
   updateProductAction,
@@ -37,6 +50,39 @@ const statusActions = [
   { value: "ARCHIVED", label: "Archive" },
 ] as const;
 
+const scanLabels: Record<string, string> = {
+  PENDING: "Scan pending",
+  CLEAN: "Scan clean",
+  SUSPICIOUS: "Review needed",
+  BLOCKED: "Blocked",
+  ERROR: "Scan failed",
+};
+
+const reviewLabels: Record<string, string> = {
+  PENDING: "Awaiting approval",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+};
+
+function scanTone(status: string): "mint" | "amber" | "muted" {
+  if (status === "CLEAN") return "mint";
+  if (status === "BLOCKED" || status === "ERROR" || status === "SUSPICIOUS") {
+    return "amber";
+  }
+  return "muted";
+}
+
+function parseScanReport(value: unknown): UploadScanReport | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Partial<UploadScanReport>;
+  return Array.isArray(candidate.findings)
+    ? (candidate as UploadScanReport)
+    : null;
+}
+
 export default async function EditProductPage({
   params,
   searchParams,
@@ -60,6 +106,10 @@ export default async function EditProductPage({
   }
 
   const currentFile = product.files.find((file) => file.isCurrent);
+  const currentFileApproved =
+    currentFile?.reviewStatus === "APPROVED" &&
+    (currentFile.scanStatus === "CLEAN" ||
+      currentFile.scanStatus === "SUSPICIOUS");
 
   const notice = query.error
     ? { tone: "error" as const, message: query.error }
@@ -79,7 +129,20 @@ export default async function EditProductPage({
               }
             : query.file === "deleted"
               ? { tone: "success" as const, message: "File deleted." }
-              : null;
+              : query.file === "approved"
+                ? {
+                    tone: "success" as const,
+                    message: "File approved and published for downloads.",
+                  }
+                : query.file === "rejected"
+                  ? { tone: "success" as const, message: "File rejected." }
+                  : query.file === "scanned"
+                    ? {
+                        tone: "success" as const,
+                        message:
+                          "Scan completed. Review the findings, then approve or reject.",
+                      }
+                    : null;
 
   return (
     <div className="space-y-7">
@@ -201,8 +264,8 @@ export default async function EditProductPage({
             Delivery files
           </h2>
           <p className="mt-1.5 text-[11px] leading-5 text-muted">
-            Exactly one version is current. Customers always receive the current
-            file through a short-lived token.
+            Uploads are quarantined, scanned, and held for approval. Customers
+            only receive the current approved file through a short-lived token.
           </p>
         </div>
 
@@ -222,63 +285,217 @@ export default async function EditProductPage({
           </div>
         ) : (
           <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
-            {product.files.map((file) => (
-              <li
-                key={file.id}
-                className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[13px] font-semibold text-ink">
-                      v{file.version}
-                    </p>
-                    {file.isCurrent ? (
-                      <Badge tone="mint" dot>
-                        Current
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <p className="mt-1 truncate font-mono text-[10px] text-muted">
-                    {file.fileName} · {formatBytes(file.sizeBytes)} ·{" "}
-                    {formatDate(file.createdAt)}
-                  </p>
-                </div>
+            {product.files.map((file) => {
+              const report = parseScanReport(file.scanReport);
+              const approved = file.reviewStatus === "APPROVED";
+              const canApprove =
+                file.scanStatus === "CLEAN" || file.scanStatus === "SUSPICIOUS";
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {!file.isCurrent ? (
-                    <form action={setCurrentFileAction}>
-                      <input type="hidden" name="productId" value={product.id} />
-                      <input type="hidden" name="fileId" value={file.id} />
-                      <SubmitButton
-                        label="Set current"
-                        pendingLabel="…"
-                        variant="outline"
-                        size="sm"
-                      />
-                    </form>
+              return (
+                <li key={file.id} className="space-y-3 px-5 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-[13px] font-semibold text-ink">
+                          v{file.version}
+                        </p>
+                        {file.isCurrent ? (
+                          <Badge tone={approved ? "mint" : "amber"} dot>
+                            {approved ? "Current" : "Current · blocked"}
+                          </Badge>
+                        ) : null}
+                        <Badge tone={scanTone(file.scanStatus)}>
+                          {scanLabels[file.scanStatus] ?? file.scanStatus}
+                        </Badge>
+                        <Badge tone={approved ? "mint" : "muted"}>
+                          {reviewLabels[file.reviewStatus] ?? file.reviewStatus}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 truncate font-mono text-[10px] text-muted">
+                        {file.fileName} · {formatBytes(file.sizeBytes)} ·{" "}
+                        {formatDate(file.createdAt)}
+                      </p>
+                      <p className="mt-1 font-mono text-[9px] text-muted">
+                        SHA-256: {file.checksumSha256.slice(0, 24)}…
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      {file.scanStatus === "PENDING" ||
+                      file.scanStatus === "ERROR" ? (
+                        <form action={rescanFileAction}>
+                          <input
+                            type="hidden"
+                            name="productId"
+                            value={product.id}
+                          />
+                          <input type="hidden" name="fileId" value={file.id} />
+                          <SubmitButton
+                            label="Scan file"
+                            pendingLabel="Scanning…"
+                            variant="outline"
+                            size="sm"
+                          />
+                        </form>
+                      ) : null}
+
+                      {!approved && canApprove ? (
+                        <form
+                          action={approveFileAction}
+                          className="flex flex-wrap items-center gap-2"
+                        >
+                          <input
+                            type="hidden"
+                            name="productId"
+                            value={product.id}
+                          />
+                          <input type="hidden" name="fileId" value={file.id} />
+                          <input
+                            name="note"
+                            maxLength={500}
+                            required={file.scanStatus === "SUSPICIOUS"}
+                            placeholder={
+                              file.scanStatus === "SUSPICIOUS"
+                                ? "Required: explain why this is safe"
+                                : "Optional review note"
+                            }
+                            className="h-10 w-56 rounded-xl border border-line bg-bg px-3 text-[11px] text-ink outline-none placeholder:text-muted focus:border-ink/30"
+                          />
+                          <SubmitButton
+                            label={
+                              file.scanStatus === "SUSPICIOUS"
+                                ? "Approve with note"
+                                : "Approve & publish"
+                            }
+                            pendingLabel="Approving…"
+                            variant="primary"
+                            size="sm"
+                          />
+                        </form>
+                      ) : null}
+
+                      {!approved ? (
+                        <form action={rejectFileAction}>
+                          <input
+                            type="hidden"
+                            name="productId"
+                            value={product.id}
+                          />
+                          <input type="hidden" name="fileId" value={file.id} />
+                          <SubmitButton
+                            label="Reject"
+                            pendingLabel="…"
+                            variant="outline"
+                            size="sm"
+                          />
+                        </form>
+                      ) : null}
+
+                      {approved && !file.isCurrent ? (
+                        <form action={setCurrentFileAction}>
+                          <input
+                            type="hidden"
+                            name="productId"
+                            value={product.id}
+                          />
+                          <input type="hidden" name="fileId" value={file.id} />
+                          <SubmitButton
+                            label="Set current"
+                            pendingLabel="…"
+                            variant="outline"
+                            size="sm"
+                          />
+                        </form>
+                      ) : null}
+
+                      <form action={deleteFileAction}>
+                        <input
+                          type="hidden"
+                          name="productId"
+                          value={product.id}
+                        />
+                        <input type="hidden" name="fileId" value={file.id} />
+                        <SubmitButton
+                          label="Delete"
+                          pendingLabel="…"
+                          variant="ghost"
+                          size="sm"
+                          confirm={`Delete v${file.version} (${file.fileName})? This removes the stored bytes.`}
+                        />
+                      </form>
+                    </div>
+                  </div>
+
+                  {report && report.findings.length > 0 ? (
+                    <details className="rounded-xl border border-line bg-bg/50 px-3 py-2">
+                      <summary className="flex cursor-pointer items-center gap-2 text-[10px] font-semibold text-ink">
+                        <Warning size={12} aria-hidden="true" />
+                        Scan findings ({report.findings.length})
+                      </summary>
+                      <ul className="mt-2 max-h-48 space-y-1.5 overflow-auto pr-2">
+                        {report.findings.map((finding, index) => (
+                          <li
+                            key={`${finding.code}-${index}`}
+                            className="flex gap-2 text-[10px] leading-5 text-muted"
+                          >
+                            {finding.severity === "block" ? (
+                              <X
+                                size={11}
+                                className="mt-1 shrink-0 text-[#b4573a]"
+                                aria-hidden="true"
+                              />
+                            ) : finding.severity === "warn" ? (
+                              <Warning
+                                size={11}
+                                className="mt-1 shrink-0 text-[#76560e]"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <Check
+                                size={11}
+                                className="mt-1 shrink-0 text-forest"
+                                aria-hidden="true"
+                              />
+                            )}
+                            <span>
+                              {finding.message}
+                              {finding.path ? (
+                                <span className="font-mono text-[9px] text-muted">
+                                  {" "}
+                                  ({finding.path})
+                                </span>
+                              ) : null}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
                   ) : null}
-                  <form action={deleteFileAction}>
-                    <input type="hidden" name="productId" value={product.id} />
-                    <input type="hidden" name="fileId" value={file.id} />
-                    <SubmitButton
-                      label="Delete"
-                      pendingLabel="…"
-                      variant="ghost"
-                      size="sm"
-                      confirm={`Delete v${file.version} (${file.fileName})? This removes the stored bytes.`}
-                    />
-                  </form>
-                </div>
-              </li>
-            ))}
+
+                  {file.reviewNote ? (
+                    <p className="text-[10px] leading-5 text-muted">
+                      Review note: {file.reviewNote}
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
 
         <p className="flex items-center gap-2 text-[10px] text-muted">
-          <Trash size={12} aria-hidden="true" />
+          {currentFileApproved ? (
+            <ShieldCheck size={12} aria-hidden="true" />
+          ) : (
+            <Trash size={12} aria-hidden="true" />
+          )}
           Current file:{" "}
           {currentFile
-            ? `${currentFile.fileName} (v${currentFile.version})`
+            ? `${currentFile.fileName} (v${currentFile.version})${
+                currentFileApproved
+                  ? ""
+                  : " — pending approval; downloads are blocked"
+              }`
             : "none"}
         </p>
       </section>

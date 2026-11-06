@@ -34,6 +34,20 @@ enum LicenseStatus {
   EXPIRED
 }
 
+enum ProductFileScanStatus {
+  PENDING
+  CLEAN
+  SUSPICIOUS
+  BLOCKED
+  ERROR
+}
+
+enum ProductFileReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -166,20 +180,28 @@ model License {
 }
 
 model ProductFile {
-  id             String   @id @default(cuid())
+  id             String                    @id @default(cuid())
   productId      String
-  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product        Product                   @relation(fields: [productId], references: [id], onDelete: Cascade)
   version        String
   storageKey     String
   fileName       String
   mimeType       String
   sizeBytes      Int
   checksumSha256 String
-  isCurrent      Boolean  @default(true)
-  createdAt      DateTime @default(now())
+  isCurrent      Boolean                   @default(false)
+  scanStatus     ProductFileScanStatus     @default(PENDING)
+  scanReport     Json?
+  scannedAt      DateTime?
+  reviewStatus   ProductFileReviewStatus   @default(PENDING)
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  reviewNote     String?
+  createdAt      DateTime                  @default(now())
 
   @@unique([productId, version])
   @@index([productId, isCurrent])
+  @@index([productId, isCurrent, reviewStatus, scanStatus])
 }
 
 model Activation {

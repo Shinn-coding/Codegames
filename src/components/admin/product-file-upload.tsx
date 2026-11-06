@@ -18,7 +18,8 @@ type UploadMode = "server" | "blob";
 
 type UploadPayload = {
   error?: unknown;
-  file?: { fileName?: string; version?: string };
+  file?: { fileName?: string; version?: string; scanStatus?: string };
+  scan?: { status?: string; findings?: Array<{ message?: string }> };
 };
 
 type UploadState =
@@ -139,11 +140,17 @@ export function ProductFileUpload({
           : await uploadThroughServer(form);
 
       form.reset();
+      const scanStatus =
+        payload.scan?.status ?? payload.file?.scanStatus ?? "PENDING";
       setState({
         status: "success",
         message: `${payload.file?.fileName ?? "File"} uploaded as v${
           payload.file?.version ?? defaultVersion
-        }.`,
+        }. It is queued for admin approval; downloads stay blocked until then.${
+          scanStatus === "SUSPICIOUS"
+            ? " The scan found something that needs a review note."
+            : ""
+        }`,
       });
       router.refresh();
     } catch (error) {
@@ -169,7 +176,8 @@ export function ProductFileUpload({
       </p>
       <p className="mt-1.5 text-[11px] leading-5 text-muted">
         ZIP, PDF, TXT, or MD, up to 50 MB. The bytes must match the extension,
-        and the file is stored privately — never at a public URL.
+        and the file is stored privately. Every upload is scanned and held for
+        approval before customers can download it.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
@@ -196,7 +204,7 @@ export function ProductFileUpload({
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-[10px] leading-5 text-muted">
-          Uploading marks this version as current for new downloads.
+          Uploading never publishes the file. Review the scan, then approve it.
         </p>
         <Button type="submit" variant="primary" size="md" disabled={loading}>
           {loading ? (

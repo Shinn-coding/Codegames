@@ -58,6 +58,10 @@ export default async function AdminProductsPage() {
           <ul className="divide-y divide-line">
             {products.map((product) => {
               const current = product.files.find((file) => file.isCurrent);
+              const currentApproved =
+                current?.reviewStatus === "APPROVED" &&
+                (current.scanStatus === "CLEAN" ||
+                  current.scanStatus === "SUSPICIOUS");
 
               return (
                 <li
@@ -89,7 +93,14 @@ export default async function AdminProductsPage() {
                   </p>
                   <p className="text-[10px] lg:text-right">
                     {current ? (
-                      <span className="text-forest">v{current.version}</span>
+                      <span
+                        className={
+                          currentApproved ? "text-forest" : "text-[#76560e]"
+                        }
+                      >
+                        v{current.version}
+                        {currentApproved ? "" : " · pending"}
+                      </span>
                     ) : (
                       <span className="text-muted">missing</span>
                     )}

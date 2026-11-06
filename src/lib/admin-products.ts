@@ -1,13 +1,29 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import { Prisma, type Product, type ProductFile } from "@prisma/client";
+import {
+  Prisma,
+  type Product,
+  type ProductFile,
+  type ProductFileScanStatus,
+} from "@prisma/client";
 
 import type { ProductFormValues, ProductStatusValue } from "@/lib/admin-core";
 import { recordAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { getStorage } from "@/lib/storage";
 import { assertSafeStorageKey } from "@/lib/storage/keys";
-import { buildProductStorageKey } from "@/lib/upload-core";
+import {
+  MAX_UPLOAD_BYTES,
+  buildProductStorageKey,
+  detectUpload,
+} from "@/lib/upload-core";
+import {
+  analyzeUpload,
+  canApproveScanStatus,
+  isBlockedScanStatus,
+  type UploadScanReport,
+  type UploadScanStatus,
+} from "@/lib/upload-security";
 
 export type AdminProduct = Prisma.ProductGetPayload<{
   include: {
@@ -34,6 +50,20 @@ export class ProductFileNotFoundError extends Error {
   constructor() {
     super("Product file not found.");
     this.name = "ProductFileNotFoundError";
+  }
+}
+
+export class ProductFileApprovalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProductFileApprovalError";
+  }
+}
+
+export class ProductFileNotApprovedError extends Error {
+  constructor() {
+    super("Only an approved, scanned file can be made current.");
+    this.name = "ProductFileNotApprovedError";
   }
 }
 
@@ -79,7 +109,9 @@ export async function listAdminProducts(): Promise<AdminProduct[]> {
   });
 }
 
-export async function getAdminProduct(id: string): Promise<AdminProduct | null> {
+export async function getAdminProduct(
+  id: string,
+): Promise<AdminProduct | null> {
   return prisma.product.findUnique({
     where: { id },
     include: {
@@ -192,14 +224,15 @@ type PersistedProductFileInput = {
   mimeType: string;
   sizeBytes: number;
   checksumSha256: string;
+  scanReport: UploadScanReport;
   actorId: string;
   ipHash?: string;
 };
 
 /**
- * Record an already-uploaded private object as the current delivery file for
- * its version. The previous bytes for the same version are removed only after
- * the database transaction succeeds.
+ * Record an already-uploaded private object. Uploads always start outside the
+ * published state: even a clean scan needs an explicit admin approval before
+ * the file can become current or be served to a customer.
  */
 async function persistProductFile(
   input: PersistedProductFileInput,
@@ -207,6 +240,8 @@ async function persistProductFile(
   assertSafeStorageKey(input.storageKey);
 
   let previousKey: string | null = null;
+  const scanStatus = input.scanReport.status as ProductFileScanStatus;
+  const scannedAt = new Date(input.scanReport.scannedAt);
 
   const file = await prisma.$transaction(async (tx) => {
     const existing = await tx.productFile.findUnique({
@@ -222,22 +257,26 @@ async function persistProductFile(
       previousKey = existing.storageKey;
     }
 
-    await tx.productFile.updateMany({
-      where: { productId: input.product.id, isCurrent: true },
-      data: { isCurrent: false },
-    });
+    const pendingData = {
+      storageKey: input.storageKey,
+      fileName: input.fileName,
+      mimeType: input.mimeType,
+      sizeBytes: input.sizeBytes,
+      checksumSha256: input.checksumSha256,
+      isCurrent: false,
+      scanStatus,
+      scanReport: input.scanReport as unknown as Prisma.InputJsonValue,
+      scannedAt,
+      reviewStatus: "PENDING" as const,
+      reviewedBy: null,
+      reviewedAt: null,
+      reviewNote: null,
+    };
 
     if (existing) {
       return tx.productFile.update({
         where: { id: existing.id },
-        data: {
-          storageKey: input.storageKey,
-          fileName: input.fileName,
-          mimeType: input.mimeType,
-          sizeBytes: input.sizeBytes,
-          checksumSha256: input.checksumSha256,
-          isCurrent: true,
-        },
+        data: pendingData,
       });
     }
 
@@ -245,18 +284,15 @@ async function persistProductFile(
       data: {
         productId: input.product.id,
         version: input.version,
-        storageKey: input.storageKey,
-        fileName: input.fileName,
-        mimeType: input.mimeType,
-        sizeBytes: input.sizeBytes,
-        checksumSha256: input.checksumSha256,
-        isCurrent: true,
+        ...pendingData,
       },
     });
   });
 
   if (previousKey) {
-    await getStorage().delete(previousKey).catch(() => undefined);
+    await getStorage()
+      .delete(previousKey)
+      .catch(() => undefined);
   }
 
   await recordAudit({
@@ -268,6 +304,8 @@ async function persistProductFile(
       version: input.version,
       fileName: input.fileName,
       sizeBytes: input.sizeBytes,
+      scanStatus: input.scanReport.status,
+      scanFindingCount: input.scanReport.findings.length,
     },
     ipHash: input.ipHash,
   });
@@ -285,6 +323,7 @@ export async function saveProductFile(input: {
   extension: string;
   mimeType: string;
   bytes: Uint8Array;
+  scanReport: UploadScanReport;
   actorId: string;
   ipHash?: string;
 }): Promise<ProductFile> {
@@ -295,9 +334,7 @@ export async function saveProductFile(input: {
     extension: input.extension,
     randomId: randomUUID().replace(/-/g, "").slice(0, 12),
   });
-  const checksumSha256 = createHash("sha256")
-    .update(input.bytes)
-    .digest("hex");
+  const checksumSha256 = createHash("sha256").update(input.bytes).digest("hex");
 
   await storage.put(storageKey, input.bytes, {
     contentType: input.mimeType,
@@ -312,6 +349,7 @@ export async function saveProductFile(input: {
       mimeType: input.mimeType,
       sizeBytes: input.bytes.byteLength,
       checksumSha256,
+      scanReport: input.scanReport,
       actorId: input.actorId,
       ipHash: input.ipHash,
     });
@@ -333,15 +371,114 @@ export async function saveProductFileFromStorage(input: {
   mimeType: string;
   sizeBytes: number;
   checksumSha256: string;
+  scanReport: UploadScanReport;
   actorId: string;
   ipHash?: string;
 }): Promise<ProductFile> {
   try {
     return await persistProductFile(input);
   } catch (error) {
-    await getStorage().delete(input.storageKey).catch(() => undefined);
+    await getStorage()
+      .delete(input.storageKey)
+      .catch(() => undefined);
     throw error;
   }
+}
+
+/**
+ * Re-run analysis for files created before the scan gate existed, or for a
+ * scan that failed transiently. This never publishes a file by itself.
+ */
+export async function reanalyzeProductFile(input: {
+  productId: string;
+  fileId: string;
+  actorId: string;
+  ipHash?: string;
+}): Promise<void> {
+  const file = await prisma.productFile.findFirst({
+    where: { id: input.fileId, productId: input.productId },
+  });
+
+  if (!file) {
+    throw new ProductFileNotFoundError();
+  }
+
+  if (file.scanStatus !== "PENDING" && file.scanStatus !== "ERROR") {
+    throw new ProductFileApprovalError(
+      "This file already has a completed scan. Upload a new version to rescan it.",
+    );
+  }
+
+  if (file.sizeBytes > MAX_UPLOAD_BYTES) {
+    throw new ProductFileApprovalError(
+      "The stored file is larger than the 50 MB scan limit.",
+    );
+  }
+
+  let bytes: Uint8Array;
+
+  try {
+    bytes = await getStorage().get(file.storageKey);
+  } catch (error) {
+    console.error(
+      "[admin] Could not read the file for rescan.",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    throw new ProductFileApprovalError(
+      "The stored file could not be read for scanning.",
+    );
+  }
+
+  if (bytes.byteLength > MAX_UPLOAD_BYTES) {
+    throw new ProductFileApprovalError(
+      "The stored file is larger than the 50 MB scan limit.",
+    );
+  }
+
+  const detected = detectUpload(bytes, file.fileName);
+
+  if (!detected) {
+    throw new ProductFileApprovalError(
+      "The stored file no longer matches its extension or file signature.",
+    );
+  }
+
+  const scanReport = await analyzeUpload({
+    bytes,
+    fileName: file.fileName,
+    detected,
+  });
+  const scanStatus = scanReport.status as ProductFileScanStatus;
+
+  await prisma.productFile.update({
+    where: { id: file.id },
+    data: {
+      scanStatus,
+      scanReport: scanReport as unknown as Prisma.InputJsonValue,
+      scannedAt: new Date(scanReport.scannedAt),
+      reviewStatus: "PENDING",
+      reviewedBy: null,
+      reviewedAt: null,
+      reviewNote: null,
+      isCurrent: isBlockedScanStatus(scanReport.status)
+        ? false
+        : file.isCurrent,
+    },
+  });
+
+  await recordAudit({
+    actorId: input.actorId,
+    action: "product.file.scan",
+    entity: "product",
+    entityId: input.productId,
+    meta: {
+      version: file.version,
+      fileName: file.fileName,
+      scanStatus: scanReport.status,
+      scanFindingCount: scanReport.findings.length,
+    },
+    ipHash: input.ipHash,
+  });
 }
 
 export async function setCurrentProductFile(input: {
@@ -352,11 +489,23 @@ export async function setCurrentProductFile(input: {
 }): Promise<void> {
   const file = await prisma.productFile.findFirst({
     where: { id: input.fileId, productId: input.productId },
-    select: { id: true, version: true },
+    select: {
+      id: true,
+      version: true,
+      scanStatus: true,
+      reviewStatus: true,
+    },
   });
 
   if (!file) {
     throw new ProductFileNotFoundError();
+  }
+
+  if (
+    file.reviewStatus !== "APPROVED" ||
+    !canApproveScanStatus(file.scanStatus as UploadScanStatus)
+  ) {
+    throw new ProductFileNotApprovedError();
   }
 
   await prisma.$transaction([
@@ -380,6 +529,133 @@ export async function setCurrentProductFile(input: {
   });
 }
 
+export async function approveProductFile(input: {
+  productId: string;
+  fileId: string;
+  actorId: string;
+  note?: string;
+  ipHash?: string;
+}): Promise<void> {
+  const file = await prisma.productFile.findFirst({
+    where: { id: input.fileId, productId: input.productId },
+  });
+
+  if (!file) {
+    throw new ProductFileNotFoundError();
+  }
+
+  const scanStatus = file.scanStatus as UploadScanStatus;
+
+  if (isBlockedScanStatus(scanStatus) || !canApproveScanStatus(scanStatus)) {
+    throw new ProductFileApprovalError(
+      "This file was blocked or could not be analyzed and cannot be approved.",
+    );
+  }
+
+  const note = input.note?.trim().slice(0, 500) || null;
+
+  if (scanStatus === "SUSPICIOUS" && !note) {
+    throw new ProductFileApprovalError(
+      "Add a review note before approving a suspicious file.",
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.productFile.updateMany({
+      where: { productId: input.productId, isCurrent: true },
+      data: { isCurrent: false },
+    });
+
+    await tx.productFile.update({
+      where: { id: file.id },
+      data: {
+        reviewStatus: "APPROVED",
+        reviewedBy: input.actorId,
+        reviewedAt: new Date(),
+        reviewNote: note,
+        isCurrent: true,
+      },
+    });
+  });
+
+  await recordAudit({
+    actorId: input.actorId,
+    action: "product.file.approve",
+    entity: "product",
+    entityId: input.productId,
+    meta: {
+      version: file.version,
+      fileName: file.fileName,
+      scanStatus: file.scanStatus,
+      note,
+    },
+    ipHash: input.ipHash,
+  });
+}
+
+export async function rejectProductFile(input: {
+  productId: string;
+  fileId: string;
+  actorId: string;
+  note?: string;
+  ipHash?: string;
+}): Promise<void> {
+  const file = await prisma.productFile.findFirst({
+    where: { id: input.fileId, productId: input.productId },
+  });
+
+  if (!file) {
+    throw new ProductFileNotFoundError();
+  }
+
+  const note = input.note?.trim().slice(0, 500) || null;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.productFile.update({
+      where: { id: file.id },
+      data: {
+        reviewStatus: "REJECTED",
+        reviewedBy: input.actorId,
+        reviewedAt: new Date(),
+        reviewNote: note,
+        isCurrent: false,
+      },
+    });
+
+    if (file.isCurrent) {
+      const replacement = await tx.productFile.findFirst({
+        where: {
+          productId: input.productId,
+          reviewStatus: "APPROVED",
+          scanStatus: { in: ["CLEAN", "SUSPICIOUS"] },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (replacement) {
+        await tx.productFile.update({
+          where: { id: replacement.id },
+          data: { isCurrent: true },
+        });
+      }
+    }
+  });
+
+  await recordAudit({
+    actorId: input.actorId,
+    action: "product.file.reject",
+    entity: "product",
+    entityId: input.productId,
+    meta: {
+      version: file.version,
+      fileName: file.fileName,
+      scanStatus: file.scanStatus,
+      note,
+    },
+    ipHash: input.ipHash,
+  });
+}
+
 export async function deleteProductFile(input: {
   productId: string;
   fileId: string;
@@ -399,7 +675,11 @@ export async function deleteProductFile(input: {
 
     if (file.isCurrent) {
       const replacement = await tx.productFile.findFirst({
-        where: { productId: input.productId },
+        where: {
+          productId: input.productId,
+          reviewStatus: "APPROVED",
+          scanStatus: { in: ["CLEAN", "SUSPICIOUS"] },
+        },
         orderBy: { createdAt: "desc" },
       });
 
@@ -412,7 +692,9 @@ export async function deleteProductFile(input: {
     }
   });
 
-  await getStorage().delete(file.storageKey).catch(() => undefined);
+  await getStorage()
+    .delete(file.storageKey)
+    .catch(() => undefined);
 
   await recordAudit({
     actorId: input.actorId,

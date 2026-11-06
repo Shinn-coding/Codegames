@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -17,6 +15,7 @@ import {
   detectUpload,
   validateProductUploadTarget,
 } from "@/lib/upload-core";
+import { analyzeUpload, isBlockedScanStatus } from "@/lib/upload-security";
 
 export const runtime = "nodejs";
 
@@ -30,6 +29,15 @@ const bodySchema = z.object({
 
 class UploadTooLargeError extends Error {}
 class EmptyUploadError extends Error {}
+
+function scanRejectionMessage(report: {
+  findings: Array<{ severity: string; message: string }>;
+}): string {
+  const block = report.findings.find((finding) => finding.severity === "block");
+  return block
+    ? `File blocked: ${block.message}`
+    : "The file could not be analyzed safely.";
+}
 
 function json(
   body: Record<string, unknown>,
@@ -232,7 +240,23 @@ export async function POST(
     );
   }
 
-  const checksumSha256 = createHash("sha256").update(bytes).digest("hex");
+  const scanReport = await analyzeUpload({
+    bytes,
+    fileName: target.fileName,
+    detected,
+  });
+
+  if (isBlockedScanStatus(scanReport.status)) {
+    await storage.delete(body.pathname).catch(() => undefined);
+
+    return json(
+      {
+        error: scanRejectionMessage(scanReport),
+        scan: scanReport,
+      },
+      { status: 422 },
+    );
+  }
 
   try {
     const saved = await saveProductFileFromStorage({
@@ -242,7 +266,8 @@ export async function POST(
       fileName: target.fileName,
       mimeType: detected.mimeType,
       sizeBytes: bytes.byteLength,
-      checksumSha256,
+      checksumSha256: scanReport.sha256,
+      scanReport,
       actorId: session.user.id,
       ipHash: hashClientIp(getClientIp(request)),
     });
@@ -256,7 +281,10 @@ export async function POST(
           fileName: saved.fileName,
           sizeBytes: saved.sizeBytes,
           isCurrent: saved.isCurrent,
+          scanStatus: saved.scanStatus,
+          reviewStatus: saved.reviewStatus,
         },
+        scan: scanReport,
       },
       { status: 201 },
     );

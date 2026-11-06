@@ -20,6 +20,7 @@ const { prisma } = await import("../../src/lib/db.ts");
 const { OrderAmountMismatchError, hashPayload, recordPaymentEvent } =
   await import("../../src/lib/orders.ts");
 const {
+  DownloadFileNotFoundError,
   DownloadLicenseNotFoundError,
   DownloadTokenExhaustedError,
   DownloadTokenExpiredError,
@@ -39,6 +40,9 @@ const { hashLicenseKey, isValidLicenseKeyFormat } =
   await import("../../src/lib/license-core.ts");
 const { env } = await import("../../src/lib/env.ts");
 const { getStorage } = await import("../../src/lib/storage/index.ts");
+const { approveProductFile, reanalyzeProductFile } =
+  await import("../../src/lib/admin-products.ts");
+const { checkRateLimit } = await import("../../src/lib/rate-limit.ts");
 
 const suffix = `${Date.now()}-${randomUUID().slice(0, 8)}`;
 const email = `integration-${suffix}@local.test`;
@@ -72,6 +76,9 @@ after(async () => {
   }
 
   await prisma.webhookEvent.deleteMany({ where: { orderNumber } });
+  await prisma.rateLimit.deleteMany({
+    where: { key: { startsWith: `integration-rate:${suffix}` } },
+  });
   await prisma.product.deleteMany({ where: { id: productId } });
   await prisma.user.deleteMany({ where: { id: userId } });
 
@@ -122,6 +129,21 @@ test("payment, license, download, and refund lifecycle", async (t) => {
     orderId = order.id;
 
     assert.equal(order.status, "PENDING");
+  });
+
+  await t.test("enforces a fixed-window rate limit", async () => {
+    const key = `integration-rate:${suffix}`;
+    const options = { key, limit: 2, windowMs: 60_000 };
+
+    const first = await checkRateLimit(options);
+    const second = await checkRateLimit(options);
+    const third = await checkRateLimit(options);
+
+    assert.equal(first.allowed, true);
+    assert.equal(second.allowed, true);
+    assert.equal(third.allowed, false);
+    assert.equal(third.remaining, 0);
+    assert.ok(third.resetAt.getTime() > Date.now());
   });
 
   await t.test("settles PAID and creates exactly one license", async () => {
@@ -198,6 +220,80 @@ test("payment, license, download, and refund lifecycle", async (t) => {
     },
   );
 
+  await t.test("does not issue a download for an unapproved file", async () => {
+    const pending = await prisma.productFile.create({
+      data: {
+        productId,
+        version: "0.9.0",
+        storageKey,
+        fileName: "pending-fixture.txt",
+        mimeType: "text/plain",
+        sizeBytes: fileBytes.byteLength,
+        checksumSha256: "pending-fixture",
+        isCurrent: true,
+        scanStatus: "SUSPICIOUS",
+        reviewStatus: "PENDING",
+      },
+    });
+
+    try {
+      await assert.rejects(
+        createDownloadLink({ licenseId, userId }),
+        DownloadFileNotFoundError,
+      );
+    } finally {
+      await prisma.productFile.delete({ where: { id: pending.id } });
+    }
+  });
+
+  await t.test("rescans and approves a pending file", async () => {
+    await getStorage().put(storageKey, fileBytes);
+
+    const pending = await prisma.productFile.create({
+      data: {
+        productId,
+        version: "0.9.1",
+        storageKey,
+        fileName: "rescan-fixture.txt",
+        mimeType: "text/plain",
+        sizeBytes: fileBytes.byteLength,
+        checksumSha256: "rescan-fixture",
+        isCurrent: true,
+        scanStatus: "PENDING",
+        reviewStatus: "PENDING",
+      },
+    });
+
+    try {
+      await reanalyzeProductFile({
+        productId,
+        fileId: pending.id,
+        actorId: userId,
+      });
+
+      const scanned = await prisma.productFile.findUnique({
+        where: { id: pending.id },
+      });
+      assert.equal(scanned?.scanStatus, "CLEAN");
+      assert.equal(scanned?.reviewStatus, "PENDING");
+
+      await approveProductFile({
+        productId,
+        fileId: pending.id,
+        actorId: userId,
+      });
+
+      const approved = await prisma.productFile.findUnique({
+        where: { id: pending.id },
+      });
+      assert.equal(approved?.reviewStatus, "APPROVED");
+      assert.equal(approved?.isCurrent, true);
+      assert.equal(approved?.reviewedBy, userId);
+    } finally {
+      await prisma.productFile.deleteMany({ where: { id: pending.id } });
+    }
+  });
+
   await t.test("issues an owner-only download link", async () => {
     await getStorage().put(storageKey, fileBytes);
 
@@ -211,6 +307,16 @@ test("payment, license, download, and refund lifecycle", async (t) => {
         sizeBytes: fileBytes.byteLength,
         checksumSha256: "integration-fixture",
         isCurrent: true,
+        scanStatus: "CLEAN",
+        scanReport: {
+          status: "CLEAN",
+          findings: [],
+          metadata: { source: "integration-fixture" },
+        },
+        scannedAt: new Date(),
+        reviewStatus: "APPROVED",
+        reviewedBy: "integration-fixture",
+        reviewedAt: new Date(),
       },
     });
     fileId = file.id;
