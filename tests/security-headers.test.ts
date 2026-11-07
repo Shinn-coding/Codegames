@@ -23,6 +23,11 @@ test("CSP uses the supplied nonce and strict script execution", () => {
   );
   assert.ok(csp.includes("object-src 'none'"));
   assert.ok(csp.includes("frame-ancestors 'none'"));
+  assert.ok(
+    csp.includes(
+      "connect-src 'self' https://vercel.com https://blob.vercel-storage.com",
+    ),
+  );
   assert.ok(csp.includes("upgrade-insecure-requests"));
   assert.ok(!csp.includes("'unsafe-eval'"));
   assert.ok(!csp.includes("ws:"));

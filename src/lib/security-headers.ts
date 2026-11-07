@@ -43,6 +43,7 @@ export function buildContentSecurityPolicy(input: {
   } = input;
   const connectSources = [
     "'self'",
+    "https://vercel.com",
     "https://blob.vercel-storage.com",
     "https://*.blob.vercel-storage.com",
     ...(isDevelopment ? ["ws:", "wss:"] : []),
